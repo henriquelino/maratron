@@ -1,0 +1,92 @@
+
+[tool.flake8]
+ignore = [
+    'E402', # module level import not at top of file
+    # let yapf handle these
+    'E501', # line too long
+    'E251', # Unexpected spaces around keyword / parameter equals
+    'E122', # continuation line missing indentation or outdented
+    'E123', # closing bracket does not match indentation of opening bracket's line
+    'E124', # closing bracket does not match visual indentation
+    'E126', # continuation line over-indented for hanging indent
+    'E226', # missing whitespace around arithmetic operator
+    'W291', # trailing whitespace
+    'E127', # continuation line over-indented for visual indent
+    'E128', # continuation line under-indented for visual indent
+]
+count = true
+statistics = true
+max-complexity = 25
+max-line-length = 200
+
+exclude = [
+    'migrations',
+    '__init__.py',
+    '__pycache__',
+    'manage.py',
+    'settings.py',
+    'env',
+    '.env',
+    '**/venv/**',
+    '**/Lib/**',
+    '**/Scripts/**',
+    '**/unused_dags/**',
+    '**/unused_plugins/**',
+]
+
+[tool.isort]
+line_length = 200
+force_grid_wrap = 6
+multi_line_output = 3
+include_trailing_comma = true
+use_parentheses = true
+ensure_newline_before_comments = true
+skip_glob = [
+    'migrations',
+    '__pycache__',
+    'manage.py',
+    'settings.py',
+    'env',
+    '.env',
+    '**/venv/**',
+    '**/Lib/**',
+    '**/Scripts/**',
+    '*/unused_dags/*',
+    '*/unused_plugins/*',
+]
+
+[tool.yapf]
+# https://github.com/google/yapf#knobs
+based_on_style = 'google'
+indent_width = 4
+
+ALIGN_CLOSING_BRACKET_WITH_VISUAL_INDENT = false
+ALLOW_MULTILINE_LAMBDAS = true
+ALLOW_MULTILINE_DICTIONARY_KEYS = false
+ALLOW_SPLIT_BEFORE_DEFAULT_OR_NAMED_ASSIGNS = true
+ALLOW_SPLIT_BEFORE_DICT_VALUE = true
+ARITHMETIC_PRECEDENCE_INDICATION = true
+BLANK_LINE_BEFORE_NESTED_CLASS_OR_DEF = true
+BLANK_LINE_BEFORE_MODULE_DOCSTRING = false
+BLANK_LINE_BEFORE_CLASS_DOCSTRING = false
+BLANK_LINES_AROUND_TOP_LEVEL_DEFINITION = 2
+BLANK_LINES_BETWEEN_TOP_LEVEL_IMPORTS_AND_VARIABLES = 1
+COALESCE_BRACKETS = false
+COLUMN_LIMIT = 200
+CONTINUATION_ALIGN_STYLE = 'SPACE'
+DEDENT_CLOSING_BRACKETS = true
+EACH_DICT_ENTRY_ON_SEPARATE_LINE = true
+INDENT_DICTIONARY_VALUE = true
+INDENT_CLOSING_BRACKETS = false
+SPACES_BEFORE_COMMENT = 2
+SPLIT_ALL_COMMA_SEPARATED_VALUES = false
+
+[tool.yapfignore]
+ignore_patterns = [
+    "**/venv/**",
+    "**/Lib/**",
+    "**/Scripts/**",
+    '*/unused_dags/*',
+    '*/unused_plugins/*',
+    ]
+
