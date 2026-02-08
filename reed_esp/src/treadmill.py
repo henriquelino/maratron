@@ -71,12 +71,12 @@ class Profile(BaseModel):
 
 skyrim = Profile(
     max_pulses_per_second=110,
-    gain=1.1,
+    gain=1.2,
     deadzone=0.01,
     smoothing=0.6, # original .3
     run_threshold=0.80,
-    walk_threshold=0.20,
-    sprint_method=SprintMethod.HOLD,
+    walk_threshold=0.30,
+    sprint_method=SprintMethod.NONE, # For skyrim, when joystick is 100% it feels like walking, so triggering run on 90% is weird, opted to trigger manually when I feel like it
     run_button = vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_SHOULDER
 )
 # amount of magnets in treadmill (4) divided by the distance it takes to complete one full revolution (13cm) = 13/4 = 3.25cm per pulse
@@ -183,6 +183,9 @@ def main(profile: Profile):
             # Calculate deltas
             new_pulses = current_pulses - last_pulse_count
             time_delta_ms = arduino_ms - last_arduino_ms
+            
+            if new_pulses > 0:
+                print(f"Total: {current_pulses} | New: {new_pulses} | Uptime: {arduino_ms}ms | Time since last: {time_delta_ms}ms")
             
             last_pulse_count = current_pulses
             last_arduino_ms = arduino_ms
