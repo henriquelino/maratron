@@ -43,7 +43,7 @@ flowchart LR
     end
 
     subgraph PC["Windows host"]
-        Py["reed_esp/src/treadmill.py<br/>(pyserial + pydantic)"]
+        Py["python/src/treadmill.py<br/>(pyserial + pydantic)"]
         VG["vgamepad<br/>(ViGEmBus driver)"]
         Game["Game<br/>(Skyrim, ...)"]
         SerialFW <-- "USB serial" --> Py
@@ -53,7 +53,7 @@ flowchart LR
 ```
 
 - Hall sensor signal -> ESP32 GPIO `4` (`HALL_PIN` in the sketch). `INPUT_PULLUP` is used; the sensor pulls the line to GND on each magnet pass, which fires a `FALLING` interrupt.
-- 11 magnets are mounted around the front roller. With a roller circumference of ~12.9 cm, each pulse = `12.9 / 11 ≈ 1.17 cm` of belt travel. Adjust `AMOUNT_OF_MAGNETS` and `ONE_REVOLUTION_CM` in `reed_esp/src/treadmill.py` to match your physical setup.
+- 11 magnets are mounted around the front roller. With a roller circumference of ~12.9 cm, each pulse = `12.9 / 11 ≈ 1.17 cm` of belt travel. Adjust `AMOUNT_OF_MAGNETS` and `ONE_REVOLUTION_CM` in `python/src/treadmill.py` to match your physical setup.
 
 ## How the Arduino sketch works
 
@@ -71,7 +71,7 @@ File: `arduino/treadmill_to_py/treadmill_to_py.ino`
 sequenceDiagram
     participant Magnet as Magnet on roller
     participant ISR as hallISR (ESP32)
-    participant Loop as loop() (ESP32)
+    participant MCU as loop() on ESP32
     participant Host as Python host
 
     Note over ISR: pulseCount = 0
@@ -82,20 +82,20 @@ sequenceDiagram
     end
 
     Note over Host: every 100 ms
-    Host->>Loop: "R"
-    Loop->>Host: "<pulseCount>,<millis()>\n"
+    Host->>MCU: "R"
+    MCU->>Host: "&lt;pulseCount&gt;,&lt;millis()&gt;\n"
     Host->>Host: delta = pulseCount - last<br/>dt = arduino_ms - last_ms
 
     opt manual reset
-        Host->>Loop: "C"
-        Loop->>ISR: noInterrupts() / pulseCount = 0
-        Loop->>Host: "ACK:RESET"
+        Host->>MCU: "C"
+        MCU->>ISR: noInterrupts() / pulseCount = 0
+        MCU->>Host: "ACK:RESET"
     end
 ```
 
 ## How the Python host uses the data
 
-File: `reed_esp/src/treadmill.py`
+File: `python/src/treadmill.py`
 
 Per poll (~100 ms):
 
@@ -155,7 +155,7 @@ On `Ctrl+C`, total pulses are converted to centimeters via `DISTANCE_PER_PULSE_C
 | Ignore tiny accidental movements | `deadzone` | increase |
 | Sprint triggers too early | `run_threshold` | increase |
 
-The active profile is defined at the bottom of `reed_esp/src/treadmill.py` (currently `skyrim`). Edit and re-run.
+The active profile is defined at the bottom of `python/src/treadmill.py` (currently `skyrim`). Edit and re-run.
 
 ## Setup
 
@@ -164,7 +164,7 @@ Prereqs:
 - Python 3.10+ on Windows
 - [ViGEmBus driver](https://github.com/nefarius/ViGEmBus/releases) installed (required by `vgamepad`)
 - Arduino IDE (or PlatformIO) with ESP32 board support
-- A USB cable and a known COM port (default expected: `COM7`, change `SERIAL_PORT` in `reed_esp/src/treadmill.py`)
+- A USB cable and a known COM port (default expected: `COM7`, change `SERIAL_PORT` in `python/src/treadmill.py`)
 
 Install Python deps:
 
@@ -183,7 +183,7 @@ Flash the ESP32:
 ## Run
 
 ```powershell
-.\.venv\Scripts\python.exe reed_esp\src\treadmill.py
+.\.venv\Scripts\python.exe python\src\treadmill.py
 ```
 
 You should see `Connected. Waiting for data...`. Step on the belt: `Total / New / Uptime / Time since last` should print each time pulses arrive. The virtual Xbox controller is now driving the left stick.
@@ -196,7 +196,7 @@ Layout:
 
 ```
 arduino/treadmill_to_py/       ESP32 firmware (single .ino)
-reed_esp/src/
+python/src/
   treadmill.py                 main entry point
   max_pps_view.py              calibration: walk to find your real max pulses/sec
   debug.py                     minimal serial probe (sanity check the link)
@@ -217,7 +217,7 @@ When tweaking the sketch, remember to close the Arduino Serial Monitor before ru
 
 Most of these were sketched in the original plan and have reference implementations sitting in `.legacy/` from the earlier mouse-sensor era. Items are roughly ordered by what unblocks what.
 
-- **Curve tuner (PyQt6)**. Replace the hardcoded two-segment piecewise curve with a draggable spline. Reference implementation: `.legacy/mouse_sensor/src/Screens/CurveEditorWindow.py` (drag/add/delete control points, draggable trigger-zone slider, save/load to JSON  `curve.json` is the expected on-disk format). Integration is the part that was half-done in the deleted `reed_esp/src/ui.py`: after computing `filtered_speed`, feed it to `curve_data.interpolate_y_from_points(int(filtered_speed * 32767))`, then convert the returned graph-Y back to a joystick value via `(margin + graph_height - y) / graph_height * 32767`. Replaces the `walk_threshold` / curve power constants.
+- **Curve tuner (PyQt6)**. Replace the hardcoded two-segment piecewise curve with a draggable spline. Reference implementation: `.legacy/mouse_sensor/src/Screens/CurveEditorWindow.py` (drag/add/delete control points, draggable trigger-zone slider, save/load to JSON  `curve.json` is the expected on-disk format). Integration is the part that was half-done in the deleted `python/src/ui.py`: after computing `filtered_speed`, feed it to `curve_data.interpolate_y_from_points(int(filtered_speed * 32767))`, then convert the returned graph-Y back to a joystick value via `(margin + graph_height - y) / graph_height * 32767`. Replaces the `walk_threshold` / curve power constants.
 
 - **Distance log viewer**. `distance_log.json` already accumulates per-session totals. A small tab showing daily/weekly km, a graph, and per-profile attribution would close the loop. Models already drafted: `UsageMetrics` in `.legacy/mouse_sensor/src/classes/profile.py`.
 
@@ -234,7 +234,7 @@ Most of these were sketched in the original plan and have reference implementati
 
 - **Sprint mode polish**. Today's "click_release" mode taps the button once on threshold crossing. Some games want repeated taps while held above threshold  make this configurable.
 
-- **Hot-reload of profile**. Editing `reed_esp/src/treadmill.py` requires a restart; the eventual UI should swap profiles live without reconnecting the gamepad.
+- **Hot-reload of profile**. Editing `python/src/treadmill.py` requires a restart; the eventual UI should swap profiles live without reconnecting the gamepad.
 
 ## Notes / gotchas
 
