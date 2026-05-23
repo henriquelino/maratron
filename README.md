@@ -70,26 +70,26 @@ File: `arduino/treadmill_to_py/treadmill_to_py.ino`
 ```mermaid
 sequenceDiagram
     participant Magnet as Magnet on roller
-    participant ISR as hallISR (ESP32)
-    participant MCU as loop() on ESP32
+    participant ISR as ESP32 hallISR
+    participant MCU as ESP32 main loop
     participant Host as Python host
 
     Note over ISR: pulseCount = 0
 
     loop every belt rotation
         Magnet->>ISR: FALLING edge on GPIO 4
-        ISR->>ISR: if now - last &gt; 2ms<br/>pulseCount++
+        ISR->>ISR: debounce 2ms<br/>then increment pulseCount
     end
 
     Note over Host: every 100 ms
-    Host->>MCU: byte 'R' (request)
-    MCU->>Host: pulseCount,millis newline-terminated
+    Host->>MCU: byte R - request
+    MCU->>Host: CSV reply pulseCount,arduino_ms
     Host->>Host: delta = pulseCount - last<br/>dt = arduino_ms - last_ms
 
     opt manual reset
-        Host->>MCU: byte 'C' (clear)
+        Host->>MCU: byte C - clear
         MCU->>ISR: noInterrupts, pulseCount = 0
-        MCU->>Host: ACK:RESET
+        MCU->>Host: reset acknowledged
     end
 ```
 
