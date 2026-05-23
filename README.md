@@ -78,18 +78,18 @@ sequenceDiagram
 
     loop every belt rotation
         Magnet->>ISR: FALLING edge on GPIO 4
-        ISR->>ISR: if (now - last > 2ms)<br/>pulseCount++
+        ISR->>ISR: if now - last &gt; 2ms<br/>pulseCount++
     end
 
     Note over Host: every 100 ms
-    Host->>MCU: "R"
-    MCU->>Host: "&lt;pulseCount&gt;,&lt;millis()&gt;\n"
+    Host->>MCU: byte 'R' (request)
+    MCU->>Host: pulseCount,millis newline-terminated
     Host->>Host: delta = pulseCount - last<br/>dt = arduino_ms - last_ms
 
     opt manual reset
-        Host->>MCU: "C"
-        MCU->>ISR: noInterrupts() / pulseCount = 0
-        MCU->>Host: "ACK:RESET"
+        Host->>MCU: byte 'C' (clear)
+        MCU->>ISR: noInterrupts, pulseCount = 0
+        MCU->>Host: ACK:RESET
     end
 ```
 
