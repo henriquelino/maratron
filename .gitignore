@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.tox/
+*.egg-info/
+
+# Editors
+.vscode/
+
+# Runtime data (regenerated on every run)
+distance_log.json
+
+# Historical references (kept locally for inspiration, not in VCS)
+.legacy/
