@@ -25,17 +25,31 @@ Maratron's main divergence is dropping the optical mouse pointed at the belt in 
 
 ## Hardware
 
-```
-[ magnets on roller ]  ->  [ hall sensor ]  ->  GPIO 4 (ESP32)  ->  USB serial  ->  PC
-                                                                                     |
-                                                                                     v
-                                                                              vgamepad (ViGEm)
-                                                                                     |
-                                                                                     v
-                                                                              Xbox controller
-                                                                                     |
-                                                                                     v
-                                                                                   Game
+```mermaid
+flowchart LR
+    subgraph Treadmill["Treadmill (physical)"]
+        Roller["Front roller<br/>11 magnets"]
+        Hall["Hall / reed sensor"]
+        Roller -- "magnet passes" --> Hall
+    end
+
+    subgraph ESP["ESP32 (firmware)"]
+        ISR["hallISR()<br/>2ms debounce"]
+        Counter["pulseCount<br/>volatile uint32_t"]
+        SerialFW["Serial @ 115200<br/>R / C protocol"]
+        Hall -- "FALLING edge<br/>on GPIO 4" --> ISR
+        ISR --> Counter
+        Counter --> SerialFW
+    end
+
+    subgraph PC["Windows host"]
+        Py["reed_esp/src/treadmill.py<br/>(pyserial + pydantic)"]
+        VG["vgamepad<br/>(ViGEmBus driver)"]
+        Game["Game<br/>(Skyrim, ...)"]
+        SerialFW <-- "USB serial" --> Py
+        Py -- "left stick + sprint" --> VG
+        VG -- "virtual Xbox 360 pad" --> Game
+    end
 ```
 
 - Hall sensor signal -> ESP32 GPIO `4` (`HALL_PIN` in the sketch). `INPUT_PULLUP` is used; the sensor pulls the line to GND on each magnet pass, which fires a `FALLING` interrupt.
@@ -53,6 +67,32 @@ File: `arduino/treadmill_to_py/treadmill_to_py.ino`
   - Host sends `C` ("Clear") -> ESP32 resets `pulseCount` to 0 under `noInterrupts()` and replies `ACK:RESET`.
 - The pulse count is **absolute and monotonic** (until reset). The host computes deltas; this means a dropped serial frame doesn't lose steps.
 
+```mermaid
+sequenceDiagram
+    participant Magnet as Magnet on roller
+    participant ISR as hallISR (ESP32)
+    participant Loop as loop() (ESP32)
+    participant Host as Python host
+
+    Note over ISR: pulseCount = 0
+
+    loop every belt rotation
+        Magnet->>ISR: FALLING edge on GPIO 4
+        ISR->>ISR: if (now - last > 2ms)<br/>pulseCount++
+    end
+
+    Note over Host: every 100 ms
+    Host->>Loop: "R"
+    Loop->>Host: "<pulseCount>,<millis()>\n"
+    Host->>Host: delta = pulseCount - last<br/>dt = arduino_ms - last_ms
+
+    opt manual reset
+        Host->>Loop: "C"
+        Loop->>ISR: noInterrupts() / pulseCount = 0
+        Loop->>Host: "ACK:RESET"
+    end
+```
+
 ## How the Python host uses the data
 
 File: `reed_esp/src/treadmill.py`
@@ -69,6 +109,38 @@ Per poll (~100 ms):
 8. **Sensitivity curve**: two-segment piecewise, quadratic below `walk_threshold` for fine low-speed control, `x^0.6` above for a softer ramp into running. (This is the part we want to replace with a user-editable curve, see roadmap.)
 9. Scale to Xbox stick range (`-32768..32767`) and push to `gamepad.left_joystick(x=0, y=joy_y)`.
 10. **Sprint**: when `joy_y > run_threshold * 32767`, press `run_button` (`HOLD` keeps it pressed; `CLICK_RELEASE` taps it for 100 ms; `NONE` disables it). For Skyrim, full-stick deflection feels like a walk in-game, so the default profile uses `NONE` and you tap sprint manually.
+
+```mermaid
+flowchart TD
+    Poll["Poll Arduino<br/>write 'R', read line"]
+    Parse["Parse 'pulseCount,millis()'"]
+    Delta["new_pulses = pulses - last_pulses<br/>dt = arduino_ms - last_ms"]
+    PPS["pulses_per_sec = new_pulses / dt"]
+    Norm["speed = pps / max_pulses_per_second<br/>(0..1 walking, >1 running)"]
+    Gain["speed *= gain<br/>clamp [0, 1]"]
+    EMA["filtered = filtered*(1-s) + speed*s<br/>(EMA smoothing)"]
+    Dead{"filtered &lt; deadzone<br/>or stopped?"}
+    Zero["filtered = 0"]
+    Curve{"filtered &lt; walk_threshold?"}
+    Low["curved = (f/wt)² · wt<br/>(fine control)"]
+    High["curved = wt + ((f-wt)/(1-wt))^0.6 · (1-wt)<br/>(softer ramp)"]
+    Joy["joy_y = int(curved · 32767)"]
+    Stick["gamepad.left_joystick(0, joy_y)"]
+    Sprint{"joy_y &gt;<br/>run_threshold · 32767?"}
+    Press["press / hold / tap<br/>run_button"]
+    Release["release run_button"]
+    Update["gamepad.update()"]
+
+    Poll --> Parse --> Delta --> PPS --> Norm --> Gain --> EMA --> Dead
+    Dead -- yes --> Zero --> Curve
+    Dead -- no --> Curve
+    Curve -- yes --> Low --> Joy
+    Curve -- no --> High --> Joy
+    Joy --> Stick --> Sprint
+    Sprint -- yes --> Press --> Update
+    Sprint -- no --> Release --> Update
+    Update --> Poll
+```
 
 On `Ctrl+C`, total pulses are converted to centimeters via `DISTANCE_PER_PULSE_CM` and appended to `distance_log.json`.
 
