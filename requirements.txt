@@ -1,3 +1,5 @@
-PyQt6==6.10.1
-pynput==1.8.1
-vgamepad==0.1.0
+pyserial
+pydantic>=2
+fastapi
+uvicorn[standard]
+vgamepad  # optional at runtime; imported lazily (needs ViGEmBus). Safe to omit on dev boxes.

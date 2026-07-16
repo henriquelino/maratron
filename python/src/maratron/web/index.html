@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maratron</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #161b22; --panel2: #1c2330;
+    --border: #2a3340; --text: #e6edf3; --muted: #8b98a5; --accent: #2f81f7;
+    --accent2: #3fb950; --danger: #f85149; --warn: #d29922; --sprint: #f778ba;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f4f6fa; --panel:#fff; --panel2:#eef1f6; --border:#d5dbe3;
+      --text:#1a2029; --muted:#5a6673; --accent:#1f6feb; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text); font-size:14px; }
+  header { display:flex; align-items:center; gap:16px; padding:12px 20px;
+    border-bottom:1px solid var(--border); background:var(--panel); position:sticky; top:0; z-index:10; }
+  header h1 { font-size:18px; margin:0; letter-spacing:.5px; }
+  header .logo { font-size:22px; }
+  .conn { margin-left:auto; display:flex; gap:14px; align-items:center; font-size:12px; color:var(--muted); }
+  .dot { width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:5px; background:var(--danger); }
+  .dot.ok { background:var(--accent2); }
+  .badge { padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; border:1px solid var(--border); }
+  .badge.mock { color:var(--warn); border-color:var(--warn); }
+  nav { display:flex; gap:6px; padding:10px 20px 0; }
+  nav button { background:none; border:none; color:var(--muted); padding:8px 16px; cursor:pointer;
+    font-size:14px; border-radius:8px 8px 0 0; }
+  nav button.active { color:var(--text); background:var(--panel); border:1px solid var(--border); border-bottom:none; }
+  main { padding:20px; }
+  .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items:start; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; }
+  .panel h2 { margin:0 0 12px; font-size:15px; }
+  .stat-row { display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; text-align:center; }
+  .stat .val { font-size:26px; font-weight:700; }
+  .stat .lbl { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+  .big { font-size:44px; font-weight:800; line-height:1; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  label { font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
+  input, select { background:var(--panel2); border:1px solid var(--border); color:var(--text);
+    border-radius:7px; padding:7px 9px; font-size:13px; width:100%; }
+  input[type=range] { padding:0; }
+  .field { margin-bottom:12px; }
+  .fields2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  button.btn { background:var(--accent); color:#fff; border:none; border-radius:7px; padding:8px 14px;
+    cursor:pointer; font-size:13px; font-weight:600; }
+  button.btn.ghost { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+  button.btn.danger { background:var(--danger); }
+  button.btn.ok { background:var(--accent2); }
+  button.btn:disabled { opacity:.5; cursor:not-allowed; }
+  .joybar-wrap { display:flex; gap:16px; align-items:flex-end; }
+  .joybar { width:44px; height:150px; background:var(--panel2); border-radius:8px; position:relative; overflow:hidden; border:1px solid var(--border); }
+  .joybar .fill { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(var(--accent2), var(--accent)); transition:height .08s linear; }
+  .joybar .thresh { position:absolute; left:0; right:0; height:2px; background:var(--sprint); }
+  .sprint-badge { color:var(--sprint); font-weight:700; visibility:hidden; }
+  .sprint-badge.on { visibility:visible; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:600; }
+  .muted { color:var(--muted); }
+  ul.plist { list-style:none; margin:0; padding:0; }
+  ul.plist li { padding:8px 10px; border-radius:7px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  ul.plist li:hover { background:var(--panel2); }
+  ul.plist li.active { background:var(--panel2); border:1px solid var(--accent); }
+  ul.plist li .tag { font-size:10px; color:var(--accent2); }
+  canvas { background:var(--panel2); border:1px solid var(--border); border-radius:8px; touch-action:none; width:100%; max-width:520px; }
+  .hint { font-size:11px; color:var(--muted); margin-top:6px; }
+  ol.steps { margin:8px 0 12px; padding-left:20px; color:var(--muted); font-size:12px; line-height:1.7; }
+  ol.steps b { color:var(--text); }
+  #toasts { position:fixed; right:18px; bottom:18px; display:flex; flex-direction:column; gap:8px; z-index:100; }
+  .toast { min-width:220px; max-width:340px; padding:11px 14px; border-radius:9px; font-size:13px; color:#fff;
+    background:var(--panel2); border:1px solid var(--border); border-left:4px solid var(--accent);
+    box-shadow:0 6px 20px rgba(0,0,0,.35); animation:toastIn .18s ease-out; display:flex; gap:9px; align-items:flex-start; }
+  .toast.ok { border-left-color:var(--accent2); }
+  .toast.error { border-left-color:var(--danger); }
+  .toast.info { border-left-color:var(--accent); }
+  .toast.fade { animation:toastOut .3s ease-in forwards; }
+  .toast .ico { font-size:14px; line-height:1.3; }
+  @keyframes toastIn { from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;} }
+  @keyframes toastOut { to{opacity:0; transform:translateY(8px);} }
+  .btn.flash { animation:btnFlash .6s ease; }
+  @keyframes btnFlash { 0%{box-shadow:0 0 0 0 var(--accent2);} 50%{box-shadow:0 0 0 4px rgba(63,185,80,.4);} 100%{box-shadow:0 0 0 0 transparent;} }
+  .help { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%;
+    border:1px solid var(--muted); color:var(--muted); font-size:10px; font-weight:700; cursor:help; margin-left:6px;
+    user-select:none; vertical-align:middle; }
+  .help:hover { color:var(--text); border-color:var(--accent); }
+  h2 .help { width:17px; height:17px; font-size:11px; }
+  #popover { position:fixed; max-width:300px; background:var(--panel2); border:1px solid var(--border);
+    border-left:3px solid var(--accent); border-radius:8px; padding:11px 13px; font-size:12px; color:var(--text);
+    line-height:1.55; box-shadow:0 10px 30px rgba(0,0,0,.45); z-index:120; display:none; }
+  #modal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:200; }
+  #modal.open { display:flex; }
+  #modal .card { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:20px 22px; width:min(880px,94vw); }
+  #modal .close { float:right; cursor:pointer; color:var(--muted); font-size:20px; background:none; border:none; }
+  #modal .mstats { display:flex; flex-wrap:wrap; gap:22px; margin:10px 0 14px; }
+  td.spark { cursor:pointer; }
+  td.spark:hover { background:var(--panel2); }
+  .spacer { flex:1; }
+</style>
+</head>
+<body>
+<div id="toasts"></div>
+<div id="popover"></div>
+<div id="modal" onclick="if(event.target.id==='modal')closeModal()">
+  <div class="card">
+    <button class="close" onclick="closeModal()">✕</button>
+    <h2 id="modalTitle">Session</h2>
+    <div class="mstats" id="modalStats"></div>
+    <canvas id="modalChart" width="820" height="320" style="width:100%; max-width:100%"></canvas>
+  </div>
+</div>
+<header>
+  <span class="logo">🏃</span>
+  <h1>MARATRON</h1>
+  <div class="conn">
+    <span id="modeBadge" class="badge mock" style="display:none">MOCK</span>
+    <span><span id="wsDot" class="dot"></span><span id="wsText">connecting…</span></span>
+  </div>
+</header>
+<nav>
+  <button id="tab-treadmill" class="active" onclick="showTab('treadmill')">Treadmill</button>
+  <button id="tab-game" onclick="showTab('game')">Game</button>
+  <button id="tab-config" onclick="showTab('config')">Config</button>
+</nav>
+<main>
+  <!-- TREADMILL VIEW -->
+  <div id="view-treadmill" class="grid">
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Current Session
+        <span id="sessBadge" class="badge" style="display:none; margin-left:8px">● recording</span>
+        <span id="gameBadge" class="badge" style="display:none; color:var(--accent2); border-color:var(--accent2)">🎮 in game</span>
+      </h2>
+      <div class="row" style="align-items:flex-start; gap:28px;">
+        <div>
+          <div class="lbl">Speed</div>
+          <div class="big"><span id="mSpeed">0.0</span> <span style="font-size:16px" class="muted" id="mSpeedUnit">km/h</span></div>
+          <div class="hint"><span id="mPps">0</span> pulses/s</div>
+        </div>
+        <div class="joybar-wrap">
+          <div>
+            <div class="lbl">Joystick</div>
+            <div class="joybar"><div id="joyFill" class="fill" style="height:0%"></div><div id="joyThresh" class="thresh" style="bottom:90%"></div></div>
+          </div>
+          <div>
+            <div class="stat"><div class="val" id="mJoyPct">0%</div><div class="lbl">forward</div></div>
+            <div class="sprint-badge" id="sprintBadge">⚡ SPRINTING</div>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div class="stat-row" style="min-width:260px">
+          <div class="stat"><div class="val" id="mTime">0:00</div><div class="lbl">Time</div></div>
+          <div class="stat"><div class="val" id="mDist">0.00</div><div class="lbl">Distance <span id="mDistUnit">m</span></div></div>
+          <div class="stat"><div class="val" id="mCal">0</div><div class="lbl">Calories</div></div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:16px">
+        <button id="sessionBtn" class="btn ok" onclick="toggleSession()">Start Session</button>
+        <button class="btn ghost" onclick="resetDistance()">Reset Distance</button>
+        <span class="hint" id="sessAutoHint" style="margin:0"></span>
+      </div>
+    </div>
+
+    <div class="panel" id="mockPanel" style="display:none">
+      <h2>Simulator</h2>
+      <label>Target speed (mock) — <span id="mockVal">0.0</span>×</label>
+      <input type="range" id="mockSlider" min="0" max="1.3" step="0.01" value="0" oninput="onMockSlider(this.value)" />
+      <div class="hint">No hardware connected — drag to simulate walking/running.</div>
+    </div>
+
+    <div class="panel">
+      <h2>All-Time Metrics</h2>
+      <div class="stat-row">
+        <div class="stat"><div class="val" id="atTime">0m</div><div class="lbl">Total time</div></div>
+        <div class="stat"><div class="val" id="atDist">0.00</div><div class="lbl">Total km</div></div>
+        <div class="stat"><div class="val" id="atCal">0</div><div class="lbl">Total cal</div></div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 3;">
+      <h2>Distance by day <span class="muted" style="font-size:12px">(when you ran most)</span></h2>
+      <div id="byDay" style="display:flex; align-items:flex-end; gap:6px; height:120px; overflow-x:auto; padding-top:8px;"></div>
+    </div>
+
+    <div class="panel" style="grid-column: span 3;">
+      <h2>Activity Log <button class="btn ghost" style="float:right" onclick="downloadCsv()">Download CSV</button>
+        <button class="btn danger" style="float:right; margin-right:8px" onclick="clearSessions()">Delete All</button></h2>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Started</th><th>Duration</th><th>Distance</th><th>Avg pace</th><th>Max</th><th>Calories</th><th>Profile</th><th>In-game</th><th>Pace over time</th><th></th></tr></thead>
+        <tbody id="logBody"><tr><td colspan="10" class="muted">No sessions yet.</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME VIEW -->
+  <div id="view-game" class="grid" style="display:none">
+    <div class="panel">
+      <h2>Profiles</h2>
+      <label>Select profile to edit</label>
+      <select id="profileSelect" onchange="selectProfileFromDropdown()"></select>
+      <button class="btn ok" style="width:100%; margin-top:8px" onclick="activateSelected()">Set Active</button>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" onclick="newProfile()">New</button>
+        <button class="btn ghost" onclick="duplicateProfile()">Duplicate</button>
+      </div>
+      <hr style="border-color:var(--border); margin:16px 0" />
+      <h2>Auto-switch<span class="help" onclick="showHelp(event,'auto_switch')">?</span></h2>
+      <div class="row"><input type="checkbox" id="autoSwitch" style="width:auto" onchange="toggleAutoSwitch(this.checked)" />
+        <label style="margin:0">Switch profile by focused window</label></div>
+      <div class="hint">Set treadmill hardware &amp; body metrics in the <b>Config</b> tab.</div>
+    </div>
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Editor — <span id="editName" class="muted">none</span></h2>
+      <div class="fields2">
+        <div class="field"><label>Profile name</label><input id="fName" /></div>
+        <div class="field"><label>Game window<span class="help" onclick="showHelp(event,'game_window')">?</span></label>
+          <div class="row" style="flex-wrap:nowrap">
+            <input id="fWindow" list="windowsList" placeholder="pick an open window or type…" style="flex:1" />
+            <button class="btn ghost" onclick="loadWindows()" title="Rescan open windows">↻</button>
+          </div>
+          <datalist id="windowsList"></datalist>
+        </div>
+      </div>
+      <div class="fields2">
+        <div class="field"><label>Max pulses/sec<span class="help" onclick="showHelp(event,'max_pps')">?</span></label><input id="fMaxPps" type="number" step="1" /></div>
+        <div class="field"><label>Gain<span class="help" onclick="showHelp(event,'gain')">?</span></label><input id="fGain" type="number" step="0.05" /></div>
+      </div>
+      <div class="fields2">
+        <div class="field"><label>Deadzone (0-1)<span class="help" onclick="showHelp(event,'deadzone')">?</span></label><input id="fDeadzone" type="number" step="0.005" /></div>
+        <div class="field"><label>Smoothing (0-1)<span class="help" onclick="showHelp(event,'smoothing')">?</span></label><input id="fSmoothing" type="number" step="0.05" /></div>
+      </div>
+      <div class="fields2">
+        <div class="field"><label>Averaging window (s)<span class="help" onclick="showHelp(event,'speed_window')">?</span></label>
+          <input id="fSpeedWindow" type="number" step="0.1" min="0" /></div>
+        <div class="field"></div>
+      </div>
+      <div class="fields2">
+        <div class="field"><label>Run threshold (0-1)<span class="help" onclick="showHelp(event,'run_threshold')">?</span></label><input id="fRunThresh" type="number" step="0.05" oninput="drawCurve()" /></div>
+        <div class="field"><label>Sprint method<span class="help" onclick="showHelp(event,'sprint_method')">?</span></label><select id="fSprint">
+          <option value="none">none</option><option value="hold">hold</option><option value="click_release">click_release</option>
+        </select></div>
+      </div>
+      <div class="field"><label>Sprint button<span class="help" onclick="showHelp(event,'run_button')">?</span></label><select id="fRunButton"></select></div>
+
+      <h2 style="margin-top:18px">Calibration<span class="help" onclick="showHelp(event,'calibration')">?</span></h2>
+      <ol class="steps">
+        <li>Click <b>Start</b>, then walk/run up to your max comfortable speed.</li>
+        <li>Click <b>Copy → Max pps</b> to set that as the joystick-100% point.</li>
+        <li>Click <b>Stop</b>, then fine-tune the shape with the Speed Curve below. Save when done.</li>
+      </ol>
+      <div class="row">
+        <div class="stat"><div class="val"><span id="calCur">0</span></div><div class="lbl">Current pps</div></div>
+        <div class="stat"><div class="val" style="color:var(--accent2)"><span id="calMax">0</span></div><div class="lbl">Max pps</div></div>
+        <div class="spacer"></div>
+        <button id="calBtn" class="btn" onclick="toggleCalibrate()">Start</button>
+        <button class="btn ok" onclick="copyMaxPps()">Copy → Max pps</button>
+        <button class="btn ghost" onclick="clearCal()">Clear</button>
+      </div>
+      <div class="hint"><b>Max pulses/sec</b> is the speed at which the joystick reaches 100%. Higher = you must run faster to max out; lower = maxes out sooner.</div>
+
+      <h2 style="margin-top:18px">Speed Curve<span class="help" onclick="showHelp(event,'curve')">?</span> <span class="muted" style="font-size:12px">(drag points · double-click add · right-click delete)</span></h2>
+      <canvas id="curve" width="520" height="360"></canvas>
+      <div class="hint">X = pulses/s · Y = joystick % (0–100). Pink = sprint trigger, purple = deadzone. Dot = live.</div>
+
+      <div class="row" style="margin-top:14px">
+        <button id="saveProfileBtn" class="btn ok" onclick="saveProfile()">Save</button>
+        <button class="btn danger" onclick="deleteProfile()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIG VIEW -->
+  <div id="view-config" class="grid" style="display:none">
+    <div class="panel">
+      <h2>Treadmill Hardware</h2>
+      <div class="fields2">
+        <div class="field"><label>Number of magnets<span class="help" onclick="showHelp(event,'magnets')">?</span></label>
+          <input type="number" id="cfgMagnets" min="1" step="1" onchange="saveConfigField('amount_of_magnets', this.value)" /></div>
+        <div class="field"><label>Distance per revolution (cm)<span class="help" onclick="showHelp(event,'rev_cm')">?</span></label>
+          <input type="number" id="cfgRevCm" min="0.1" step="0.1" onchange="saveConfigField('one_revolution_cm', this.value)" /></div>
+      </div>
+      <div class="stat" style="margin-top:6px">
+        <div class="val"><span id="cfgCmPerPulse">0</span> <span class="muted" style="font-size:14px">cm</span></div>
+        <div class="lbl">distance per pulse (revolution ÷ magnets)</div>
+      </div>
+      <div class="hint">One magnet passes the sensor per pulse. Distance walked = total pulses × cm/pulse.</div>
+      <div class="field" style="margin-top:16px"><label>Serial port (ESP32)<span class="help" onclick="showHelp(event,'serial_port')">?</span></label>
+        <div class="row" style="flex-wrap:nowrap">
+          <select id="cfgSerial" onchange="saveConfigText('serial_port', this.value)" style="flex:1"></select>
+          <button class="btn ghost" onclick="loadSerialPorts()" title="Rescan ports">↻</button>
+          <button class="btn" onclick="reconnectSerial()">Connect</button>
+        </div>
+      </div>
+      <div class="hint" id="serialStatus">Pick the ESP32's port and click <b>Connect</b> to open it live (leaves mock mode). ↻ rescans.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Tracking &amp; Units</h2>
+      <div class="row" style="margin-bottom:12px">
+        <input type="checkbox" id="cfgMetric" style="width:auto" onchange="patchConfig({metric_units:this.checked})" />
+        <label style="margin:0">Metric units (km/h, m) — uncheck for mph, ft</label>
+        <span class="help" onclick="showHelp(event,'metric_units')">?</span>
+      </div>
+      <div class="row" style="margin-bottom:12px">
+        <input type="checkbox" id="cfgSessionAuto" style="width:auto" onchange="patchConfig({session_auto:this.checked})" />
+        <label style="margin:0">Auto-record sessions when you move</label>
+        <span class="help" onclick="showHelp(event,'session_auto')">?</span>
+      </div>
+      <div class="fields2">
+        <div class="field"><label>Weight (kg)<span class="help" onclick="showHelp(event,'weight')">?</span></label>
+          <input type="number" id="cfgWeight" step="0.5" onchange="saveConfigField('weight_kg', this.value)" /></div>
+        <div class="field"><label>Incline (%)<span class="help" onclick="showHelp(event,'incline')">?</span></label>
+          <input type="number" id="cfgIncline" step="0.1" onchange="saveConfigField('incline_pct', this.value)" /></div>
+      </div>
+      <div class="hint">Changes save instantly and apply live (distance/speed recompute on the next reading).</div>
+    </div>
+
+    <div class="panel">
+      <h2>Incline Calculator<span class="help" onclick="showHelp(event,'incline_calc')">?</span></h2>
+      <div class="fields2">
+        <div class="field"><label>Front height (cm)</label>
+          <input type="number" id="icFront" step="0.1" value="19" oninput="calcIncline()" /></div>
+        <div class="field"><label>Back height (cm)</label>
+          <input type="number" id="icBack" step="0.1" value="9" oninput="calcIncline()" /></div>
+      </div>
+      <div class="field"><label>Distance between the two points (cm)</label>
+        <input type="number" id="icLen" step="0.1" value="86.6" oninput="calcIncline()" /></div>
+      <div class="stat-row" style="margin:8px 0 4px">
+        <div class="stat"><div class="val" id="icGrade">—</div><div class="lbl">Grade %</div></div>
+        <div class="stat"><div class="val" id="icAngle">—</div><div class="lbl">Angle</div></div>
+        <div class="stat"><div class="val" id="icRise">—</div><div class="lbl">Rise (cm)</div></div>
+      </div>
+      <div class="hint" id="icEffort"></div>
+      <button class="btn ok" style="margin-top:12px" onclick="useIncline()">Use as Incline</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const JOY_MAX = 32767;
+let state = {};          // latest EngineStatus
+let profiles = [];       // list of Profile
+let config = {};
+let editing = null;      // profile being edited (deep copy)
+let buttons = [];
+// calibration tracking (client-side, reads live pps)
+let cal = { on:false, max:0 };
+
+// ---- curve mirror of control.py interpolate_curve ----
+function interpolateCurve(x, pts) {
+  if (!pts.length) return x;
+  const p = [...pts].sort((a,b)=>a[0]-b[0]);
+  if (x <= p[0][0]) return p[0][1];
+  if (x >= p[p.length-1][0]) return p[p.length-1][1];
+  for (let i=0;i<p.length-1;i++){
+    const [x1,y1]=p[i], [x2,y2]=p[i+1];
+    if (x1<=x && x<=x2){ if(x2===x1) return y2; const t=(x-x1)/(x2-x1); return y1+t*(y2-y1); }
+  }
+  return p[p.length-1][1];
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(await r.text());
+  return r.status === 204 ? null : r.json();
+}
+
+const TOAST_ICON = { ok:'✅', error:'⛔', info:'ℹ️' };
+function toast(msg, type='ok', ms=2600) {
+  const box = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.innerHTML = `<span class="ico">${TOAST_ICON[type]||''}</span><span>${msg}</span>`;
+  box.appendChild(el);
+  setTimeout(() => { el.classList.add('fade'); setTimeout(() => el.remove(), 300); }, ms);
+}
+function flash(btn) { if (!btn) return; btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash'); }
+
+const HELP = {
+  game_window: "<b>Game window</b> — for auto-switch. The app compares this text to the title of the focused window; if it's contained in the title, this profile activates. Pick an open window from the list or type part of a title (e.g. “Skyrim”).",
+  max_pps: "<b>Max pulses/sec</b> — the pace that maps to 100% joystick (full forward). Higher → you must move faster to reach full speed (less sensitive). Lower → maxes out sooner (more sensitive). Use the Calibration tool to measure your top pace.",
+  gain: "<b>Gain</b> — a flat multiplier on speed before the curve. >1 makes everything more sensitive; <1 less. Keep near 1.0 and shape feel with the curve instead.",
+  deadzone: "<b>Deadzone</b> — any speed below this (0–1) is forced to zero, so tiny shuffles and sensor noise don't move the stick. Raise it if the character drifts while you stand still.",
+  smoothing: "<b>Smoothing</b> — how fast the output reacts (exponential moving average). Higher = snappier but twitchier; lower = smoother but laggier. For “wiggles at a steady pace”, the Averaging window below is the better fix.",
+  speed_window: "<b>Averaging window</b> — averages pulses over this many seconds before smoothing. A manual belt speeds up on each push and slows on recovery, so raw speed bounces even at a steady pace. Averaging over ~one stride (0.6–1.0s) evens that out. Longer = steadier but slower to react; 0 = off.",
+  run_threshold: "<b>Run threshold</b> — when joystick output crosses this fraction (0–1) of full, the sprint button fires. Lower = sprint kicks in earlier; higher = you must go faster. It's the pink line on the curve.",
+  sprint_method: "<b>Sprint method</b> — how the sprint button is pressed. <b>none</b>: never (walk only). <b>hold</b>: held while you're above the run threshold. <b>click_release</b>: a quick tap each time you cross it (for games that toggle sprint).",
+  run_button: "<b>Sprint button</b> — which controller button is sent for sprint when the run threshold is crossed. Match it to your game's sprint binding.",
+  curve: "<b>Speed curve</b> — maps your pace (X, pulses/s) to joystick output (Y, 0–100%). Drag points to shape it: flatten the low end for fine walking control, steepen the top for quick running. Double-click to add a point, right-click to delete. The green dot is your live speed; pink = sprint trigger, purple = deadzone.",
+  calibration: "<b>Calibration</b> — measures your pulses/second. Click <b>Start</b> and walk up to your max comfortable speed; Max pps records your peak. Click <b>Copy → Max pps</b> to set that as 100% joystick, then <b>Stop</b>. Save the profile to keep it.",
+  auto_switch: "<b>Auto-switch</b> — when on, the app watches the focused window and automatically activates the profile whose “Game window” text matches, so switching games switches profiles hands-free.",
+  magnets: "<b>Number of magnets</b> — how many magnets are on your roller. One pulse is counted per magnet per revolution. With the distance below, this sets how far each pulse means. Must match your hardware.",
+  rev_cm: "<b>Distance per revolution</b> — belt distance for one full roller turn (cm). Distance per pulse = this ÷ magnets. Measure by marking the belt and rolling exactly one revolution.",
+  serial_port: "<b>Serial port</b> — the COM port your ESP32 appears as. Pick it and click Connect. On Windows the CH340 / USB-serial entry is usually the board.",
+  metric_units: "<b>Units</b> — on = km/h and meters; off = mph and feet. Display only; doesn't change the control math.",
+  session_auto: "<b>Auto-record sessions</b> — when on, a session starts automatically as soon as the belt moves and ends after a short idle. Each session also records how much time the matching game window was focused, so you get both treadmill-only and in-game stats. Off = only manual Start/Stop.",
+  weight: "<b>Weight</b> — your body weight, used only to estimate calories in the session log. Optional.",
+  incline: "<b>Incline</b> — treadmill incline %, used only for the calorie estimate. Optional. Use the Incline Calculator to work it out from measurements.",
+  incline_calc: "<b>Incline Calculator</b> — enter the height of the front and back of the deck and the straight-line distance between those two points. It computes grade % (rise ÷ run) and angle. “Use as Incline” copies the grade into the Incline field. Effort multiplier ≈ 1 + 0.18 × grade vs flat walking.",
+};
+function helpIcon(key){ return `<span class="help" onclick="showHelp(event,'${key}')">?</span>`; }
+function showHelp(ev, key){
+  ev.stopPropagation();
+  const pop = document.getElementById('popover');
+  if (pop.style.display === 'block' && pop.dataset.key === key) { pop.style.display='none'; return; }
+  pop.innerHTML = HELP[key] || '';
+  pop.dataset.key = key;
+  pop.style.display = 'block';
+  const r = ev.target.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 12)) + 'px';
+  pop.style.top = (r.bottom + 6) + 'px';
+}
+document.addEventListener('click', () => { document.getElementById('popover').style.display='none'; });
+
+function showTab(t) {
+  for (const v of ['treadmill','game','config'])
+    document.getElementById('view-'+v).style.display = t===v ? 'grid' : 'none';
+  for (const v of ['treadmill','game','config'])
+    document.getElementById('tab-'+v).classList.toggle('active', t===v);
+  if (t==='game') { drawCurve(); loadWindows(); }
+  if (t==='config') { renderConfig(); calcIncline(); }
+}
+
+// ---------------- WebSocket ----------------
+function connectWs() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = (e) => { state = JSON.parse(e.data); onStatus(); };
+  ws.onopen = () => setConn(true);
+  ws.onclose = () => { setConn(false); setTimeout(connectWs, 1000); };
+}
+let _wasConn = null;
+function setConn(ok) {
+  document.getElementById('wsDot').classList.toggle('ok', ok);
+  document.getElementById('wsText').textContent = ok ? 'connected' : 'disconnected';
+  if (_wasConn !== ok) {
+    if (ok) toast(_wasConn === null ? 'Dashboard connected' : 'Reconnected', 'ok', 1800);
+    else toast('Connection lost — retrying…', 'error', 2000);
+    _wasConn = ok;
+  }
+}
+
+function fmtTime(s){ const m=Math.floor(s/60), ss=Math.floor(s%60); return `${m}:${ss.toString().padStart(2,'0')}`; }
+
+function onStatus() {
+  const metric = config.metric_units !== false;
+  // speed: pps -> cm/s -> km/h (or mph)
+  const cmPerPulse = (config.one_revolution_cm||12.9)/(config.amount_of_magnets||11);
+  const cmPerSec = state.pulses_per_sec * cmPerPulse;
+  const kmh = cmPerSec * 3600 / 100000;
+  document.getElementById('mSpeed').textContent = (metric?kmh:kmh*0.621371).toFixed(1);
+  document.getElementById('mSpeedUnit').textContent = metric?'km/h':'mph';
+  document.getElementById('mPps').textContent = (state.pulses_per_sec||0).toFixed(1);
+  document.getElementById('mJoyPct').textContent = Math.round(state.joystick_pct||0)+'%';
+  document.getElementById('joyFill').style.height = (state.joystick_pct||0)+'%';
+  document.getElementById('sprintBadge').classList.toggle('on', !!state.sprinting);
+
+  // mode + mock panel
+  const mock = !!state.mock;
+  document.getElementById('modeBadge').style.display = mock?'inline-block':'none';
+  document.getElementById('mockPanel').style.display = mock?'block':'none';
+
+  // session (backend-driven)
+  const active = !!state.session_active;
+  const sDist = state.session_distance_m||0;
+  document.getElementById('mTime').textContent = fmtTime(state.session_duration_s||0);
+  document.getElementById('mDist').textContent = metric ? sDist.toFixed(1) : (sDist*3.28084).toFixed(1);
+  document.getElementById('mDistUnit').textContent = metric?'m':'ft';
+  document.getElementById('mCal').textContent = Math.round(state.session_calories||0);
+  const sb = document.getElementById('sessBadge');
+  sb.style.display = active ? 'inline-block' : 'none';
+  sb.style.color = 'var(--danger)'; sb.style.borderColor = 'var(--danger)';
+  document.getElementById('gameBadge').style.display = state.game_focused ? 'inline-block' : 'none';
+  const sBtn = document.getElementById('sessionBtn');
+  sBtn.textContent = active ? 'Stop Session' : 'Start Session';
+  sBtn.classList.toggle('danger', active); sBtn.classList.toggle('ok', !active);
+  document.getElementById('sessAutoHint').textContent =
+    active ? (state.session_auto ? '(auto-started — recording)' : '(recording)')
+           : (config.session_auto ? 'auto-starts when you move' : 'manual sessions');
+  if (_wasSessionActive && !active) loadSessions();  // a session just ended → refresh log
+  _wasSessionActive = active;
+
+  // calibration live
+  if (cal.on) {
+    cal.max = Math.max(cal.max, state.pulses_per_sec||0);
+    document.getElementById('calCur').textContent = (state.pulses_per_sec||0).toFixed(1);
+    document.getElementById('calMax').textContent = cal.max.toFixed(1);
+  }
+
+  // live dot on curve
+  if (document.getElementById('view-game').style.display !== 'none') drawCurve();
+}
+
+// ---------------- Session ----------------
+let _wasSessionActive = false;
+async function toggleSession() {
+  try {
+    if (state.session_active) {
+      const r = await api('/api/session/stop', {method:'POST'});
+      toast(r.saved ? 'Session stopped & saved' : 'Session stopped (too short to save)');
+      loadSessions();
+    } else {
+      await api('/api/session/start', {method:'POST'});
+      toast('Session started ⏱️', 'info');
+    }
+  } catch(e){ toast('Session error: '+e.message, 'error', 4000); }
+}
+function sparkline(samples){
+  if (!samples || samples.length < 2) return '<span class="muted">—</span>';
+  const w=100, h=24, maxX=Math.max(...samples.map(s=>s[0]))||1, maxY=Math.max(...samples.map(s=>s[1]))||1;
+  const pts = samples.map(s=>`${(s[0]/maxX*w).toFixed(1)},${(h-s[1]/maxY*(h-2)-1).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" style="vertical-align:middle"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.5"/></svg>`;
+}
+async function loadSessions() {
+  let sessions = [];
+  try { sessions = await api('/api/sessions'); } catch(e){}
+  const metric = config.metric_units !== false;
+  const spd = v => metric ? (v||0).toFixed(1)+' km/h' : ((v||0)*0.621371).toFixed(1)+' mph';
+  const body = document.getElementById('logBody');
+  if (!sessions.length) { body.innerHTML = '<tr><td colspan="10" class="muted">No sessions yet.</td></tr>'; }
+  else body.innerHTML = sessions.slice().reverse().map(s => {
+    const inGame = s.duration_s>0 ? Math.round((s.game_focused_s||0)/s.duration_s*100) : 0;
+    const dist = metric ? (s.distance_m||0).toFixed(0)+' m' : ((s.distance_m||0)*3.28084).toFixed(0)+' ft';
+    return `<tr><td>${new Date(s.started_at).toLocaleString()}</td><td>${fmtTime(s.duration_s)}</td>
+      <td>${dist}</td><td>${paceStr(s.avg_speed)}</td><td>${spd(s.max_speed)}</td><td>${Math.round(s.calories||0)}</td>
+      <td>${s.profile||''}</td><td>${inGame}%${s.auto?'':' <span class="muted">(m)</span>'}</td>
+      <td class="spark" onclick="openChart('${s.started_at}')" title="Click to expand">${sparkline(s.samples)}</td>
+      <td><button class="btn ghost" style="padding:3px 9px" onclick="deleteSession('${s.started_at}')" title="Delete this session">🗑</button></td></tr>`;
+  }).join('');
+  const tot = sessions.reduce((a,s)=>({t:a.t+s.duration_s, d:a.d+s.distance_m, c:a.c+s.calories}), {t:0,d:0,c:0});
+  document.getElementById('atTime').textContent = Math.round(tot.t/60)+'m';
+  document.getElementById('atDist').textContent = (tot.d/1000).toFixed(2);
+  document.getElementById('atCal').textContent = Math.round(tot.c);
+  renderByDay(sessions);
+  window._sessions = sessions;
+}
+function renderByDay(sessions){
+  const box = document.getElementById('byDay'); if (!box) return;
+  const byDay = {};
+  sessions.forEach(s => { const k = new Date(s.started_at).toISOString().slice(0,10); byDay[k] = (byDay[k]||0) + s.distance_m; });
+  const days = Object.keys(byDay).sort();
+  if (!days.length) { box.innerHTML = '<span class="muted">No data yet — take a walk.</span>'; return; }
+  const max = Math.max(...days.map(d=>byDay[d])) || 1;
+  box.innerHTML = days.map(d => {
+    const h = Math.max(4, byDay[d]/max*100);
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:36px">
+      <div title="${(byDay[d]/1000).toFixed(2)} km" style="width:24px;height:${h}px;background:var(--accent);border-radius:3px 3px 0 0"></div>
+      <span style="font-size:9px;color:var(--muted)">${d.slice(5)}</span></div>`;
+  }).join('');
+}
+async function clearSessions(){ if(!confirm('Delete all sessions?'))return; await api('/api/sessions',{method:'DELETE'}); loadSessions(); toast('All sessions deleted'); }
+async function deleteSession(startedAt){
+  if(!confirm('Delete this session?'))return;
+  try { await api('/api/sessions/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({started_at:startedAt})});
+    toast('Session deleted'); loadSessions(); }
+  catch(e){ toast('Delete failed: '+e.message,'error',4000); }
+}
+function paceStr(kmh){ if(!kmh||kmh<=0) return '—'; const min=60/kmh, m=Math.floor(min), s=Math.round((min-m)*60);
+  return `${m}:${s.toString().padStart(2,'0')} /km`; }
+
+// ---------------- Session detail modal ----------------
+function closeModal(){ document.getElementById('modal').classList.remove('open'); }
+function openChart(startedAt){
+  const s=(window._sessions||[]).find(x=>x.started_at===startedAt); if(!s)return;
+  const metric = config.metric_units!==false;
+  document.getElementById('modalTitle').textContent = new Date(s.started_at).toLocaleString();
+  const inGame = s.duration_s>0?Math.round((s.game_focused_s||0)/s.duration_s*100):0;
+  const dist = metric?`${s.distance_m.toFixed(0)} m`:`${(s.distance_m*3.28084).toFixed(0)} ft`;
+  const rows = [['Duration',fmtTime(s.duration_s)],['Distance',dist],['Avg pace',paceStr(s.avg_speed)],
+    ['Avg speed',`${s.avg_speed} km/h`],['Max speed',`${s.max_speed} km/h`],['Calories',Math.round(s.calories||0)],
+    ['Profile',s.profile||'—'],['In-game',inGame+'%']];
+  document.getElementById('modalStats').innerHTML = rows.map(([l,v])=>
+    `<div class="stat"><div class="val" style="font-size:19px">${v}</div><div class="lbl">${l}</div></div>`).join('');
+  document.getElementById('modal').classList.add('open');
+  drawSessionChart(s);
+}
+let _chartSession = null;
+function drawSessionChart(s){
+  _chartSession = s;
+  const c = document.getElementById('modalChart');
+  if (!c._hoverBound){
+    c._hoverBound = true;
+    c.addEventListener('mousemove', e => {
+      const r=c.getBoundingClientRect(); renderChart((e.clientX-r.left)*(c.width/r.width));
+    });
+    c.addEventListener('mouseleave', () => renderChart(null));
+  }
+  renderChart(null);
+}
+function _roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function renderChart(mx){
+  const s=_chartSession; if(!s) return;
+  const c=document.getElementById('modalChart'), ctx=c.getContext('2d');
+  ctx.clearRect(0,0,c.width,c.height);
+  const css=getComputedStyle(document.documentElement);
+  const g=k=>(css.getPropertyValue(k)||'').trim();
+  const accent=g('--accent')||'#2f81f7', border=g('--border')||'#333', muted=g('--muted')||'#888',
+        panel2=g('--panel2')||'#1c2330', text=g('--text')||'#e6edf3';
+  const P={l:54,r:16,t:14,b:34}, w=c.width, h=c.height, x0=P.l, y0=h-P.b, pw=w-P.l-P.r, ph=h-P.t-P.b;
+  const sm=s.samples||[];
+  ctx.font='11px system-ui'; ctx.fillStyle=muted;
+  if(sm.length<2){ ctx.fillText('Not enough data recorded for a chart.', x0, P.t+ph/2); return; }
+  const maxT=Math.max(...sm.map(p=>p[0]))||1, maxV=Math.max(...sm.map(p=>p[1]),1);
+  ctx.strokeStyle=border; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x0,P.t); ctx.lineTo(x0,y0); ctx.lineTo(x0+pw,y0); ctx.stroke();
+  for(let i=0;i<=4;i++){ const gy=y0-i/4*ph; ctx.globalAlpha=.18; ctx.beginPath(); ctx.moveTo(x0,gy); ctx.lineTo(x0+pw,gy); ctx.stroke(); ctx.globalAlpha=1;
+    ctx.fillText((i/4*maxV).toFixed(1), 8, gy+3); }
+  for(let i=0;i<=5;i++){ const gx=x0+i/5*pw; ctx.fillText(fmtTime(i/5*maxT), gx-12, y0+16); }
+  ctx.save(); ctx.translate(14,P.t+ph/2); ctx.rotate(-Math.PI/2); ctx.fillText('Speed (km/h)',0,0); ctx.restore();
+  ctx.fillText('Time', x0+pw/2-10, h-4);
+  const X=t=>x0+t/maxT*pw, Y=v=>y0-v/maxV*ph;
+  ctx.beginPath(); ctx.moveTo(X(sm[0][0]),y0); sm.forEach(p=>ctx.lineTo(X(p[0]),Y(p[1])));
+  ctx.lineTo(X(sm[sm.length-1][0]),y0); ctx.closePath(); ctx.fillStyle=accent+'22'; ctx.fill();
+  ctx.beginPath(); sm.forEach((p,i)=>{ const fn=i?'lineTo':'moveTo'; ctx[fn](X(p[0]),Y(p[1])); }); ctx.strokeStyle=accent; ctx.lineWidth=2; ctx.stroke();
+  ctx.strokeStyle=muted; ctx.setLineDash([5,4]); ctx.beginPath(); ctx.moveTo(x0,Y(s.avg_speed)); ctx.lineTo(x0+pw,Y(s.avg_speed)); ctx.stroke(); ctx.setLineDash([]);
+  // data points
+  ctx.fillStyle=accent;
+  sm.forEach(p=>{ ctx.beginPath(); ctx.arc(X(p[0]),Y(p[1]),2.6,0,7); ctx.fill(); });
+  // hover crosshair + tooltip
+  if(mx!=null && mx>=x0-6 && mx<=x0+pw+6){
+    let best=sm[0], bd=1e9;
+    sm.forEach(p=>{ const d=Math.abs(X(p[0])-mx); if(d<bd){bd=d;best=p;} });
+    const px=X(best[0]), py=Y(best[1]);
+    ctx.strokeStyle=muted; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(px,P.t); ctx.lineTo(px,y0); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle=accent; ctx.beginPath(); ctx.arc(px,py,4.5,0,7); ctx.fill();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke();
+    const txt=`${fmtTime(best[0])}  ·  ${best[1].toFixed(1)} km/h  ·  ${paceStr(best[1])}`;
+    ctx.font='11px system-ui'; const tw=ctx.measureText(txt).width+14;
+    let tx=px+10; if(tx+tw>x0+pw) tx=px-10-tw; const ty=P.t+2;
+    ctx.fillStyle=panel2; ctx.strokeStyle=border; ctx.lineWidth=1; _roundRect(ctx,tx,ty,tw,22,6); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=text; ctx.fillText(txt, tx+7, ty+15);
+  }
+}
+function downloadCsv(){
+  const s = window._sessions||[];
+  const rows = [['started_at','ended_at','duration_s','distance_m','avg_speed_kmh','max_speed_kmh','calories','profile','game','game_focused_s','auto'],
+    ...s.map(x=>[x.started_at,x.ended_at||'',x.duration_s,x.distance_m,x.avg_speed,x.max_speed,x.calories,x.profile||'',x.game||'',x.game_focused_s||0,x.auto])];
+  const csv = rows.map(r=>r.join(',')).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='maratron-sessions.csv'; a.click();
+}
+
+async function resetDistance(){ await api('/api/distance/reset',{method:'POST'}); toast('Distance reset'); }
+function onMockSlider(v){ document.getElementById('mockVal').textContent=(+v).toFixed(2);
+  api('/api/mock-speed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value:+v})}).catch(()=>{}); }
+
+// ---------------- Calibration ----------------
+function toggleCalibrate(){
+  cal.on=!cal.on;
+  const b=document.getElementById('calBtn');
+  b.textContent=cal.on?'Stop':'Start'; b.classList.toggle('danger', cal.on);
+  if (cal.on) { cal.max=0; document.getElementById('calMax').textContent='0'; toast('Calibrating — walk up to your top speed', 'info', 3200); }
+  else toast(`Calibration stopped — peak ${cal.max.toFixed(1)} pps`);
+}
+function clearCal(){ cal.max=0; document.getElementById('calMax').textContent='0'; document.getElementById('calCur').textContent='0'; toast('Calibration cleared', 'info', 1500); }
+function copyMaxPps(){
+  if (cal.max<=0) return toast('No pulses measured yet — click Start and walk', 'error', 3500);
+  const v = Math.max(1, Math.ceil(cal.max));
+  document.getElementById('fMaxPps').value = v;
+  if (editing) editing.max_pulses_per_second = v;
+  drawCurve();
+  toast(`Max pps ${v} copied → remember to Save the profile`);
+}
+
+// ---------------- Profiles ----------------
+async function loadProfiles() {
+  profiles = await api('/api/profiles');
+  const keep = editing && editing.name;
+  renderProfileSelect(keep);
+  if (!editing && profiles.length) loadIntoEditor(profiles.find(p=>p.name===state.active_profile)||profiles[0]);
+}
+function renderProfileSelect(selectName) {
+  const sel = document.getElementById('profileSelect');
+  const chosen = selectName || (editing && editing.name) || state.active_profile;
+  sel.innerHTML = profiles.map(p => {
+    const active = p.name===state.active_profile ? ' ● active' : '';
+    return `<option value="${encodeURIComponent(p.name)}"${p.name===chosen?' selected':''}>${p.name}${active}</option>`;
+  }).join('');
+}
+function selectProfileFromDropdown(){
+  const name = decodeURIComponent(document.getElementById('profileSelect').value);
+  loadIntoEditor(profiles.find(p=>p.name===name));
+}
+async function activateSelected(){
+  const name = decodeURIComponent(document.getElementById('profileSelect').value);
+  try { await api('/api/active-profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+    if (state) state.active_profile = name;
+    renderProfileSelect(name); toast(`“${name}” is now active`); }
+  catch(e){ toast('Activate failed: '+e.message, 'error', 4500); }
+}
+function loadIntoEditor(p) {
+  if (!p) return;
+  editing = JSON.parse(JSON.stringify(p));
+  document.getElementById('editName').textContent = p.name;
+  document.getElementById('fName').value = p.name;
+  document.getElementById('fWindow').value = p.game_window||'';
+  document.getElementById('fMaxPps').value = p.max_pulses_per_second;
+  document.getElementById('fGain').value = p.gain;
+  document.getElementById('fDeadzone').value = p.deadzone;
+  document.getElementById('fSmoothing').value = p.smoothing;
+  document.getElementById('fSpeedWindow').value = p.speed_window_s ?? 0.8;
+  document.getElementById('fRunThresh').value = p.run_threshold;
+  document.getElementById('fSprint').value = p.sprint_method;
+  document.getElementById('fRunButton').value = p.run_button;
+  renderProfileSelect(p.name);
+  drawCurve();
+}
+function readEditor() {
+  return {
+    name: document.getElementById('fName').value.trim(),
+    game_window: document.getElementById('fWindow').value.trim()||null,
+    max_pulses_per_second: +document.getElementById('fMaxPps').value,
+    gain: +document.getElementById('fGain').value,
+    deadzone: +document.getElementById('fDeadzone').value,
+    smoothing: +document.getElementById('fSmoothing').value,
+    speed_window_s: +document.getElementById('fSpeedWindow').value,
+    run_threshold: +document.getElementById('fRunThresh').value,
+    sprint_method: document.getElementById('fSprint').value,
+    run_button: document.getElementById('fRunButton').value,
+    curve_points: editing.curve_points,
+  };
+}
+let openWindows = [];
+async function loadWindows(){
+  try { openWindows = await api('/api/windows'); } catch(e){ openWindows = []; }
+  const dl = document.getElementById('windowsList');
+  if (dl) dl.innerHTML = openWindows.map(w => `<option value="${w.replace(/"/g,'&quot;')}"></option>`).join('');
+}
+async function saveProfile() {
+  const p = readEditor();
+  if (!p.name) return toast('Profile name is required', 'error');
+  const orig = document.getElementById('editName').textContent;
+  const isNew = !profiles.some(x => x.name === orig);
+  try {
+    if (isNew) await api('/api/profiles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+    else await api('/api/profiles/'+encodeURIComponent(orig),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+    await loadProfiles(); loadIntoEditor(p);
+    flash(document.getElementById('saveProfileBtn'));
+    toast(`Profile “${p.name}” saved`);
+  } catch(e){ toast('Save failed: '+e.message, 'error', 4500); }
+}
+function newProfile() {
+  editing = {name:'', game_window:null, max_pulses_per_second:30, gain:1.1, deadzone:0.02,
+    smoothing:0.3, speed_window_s:0.8, run_threshold:0.9, sprint_method:'hold',
+    run_button:buttons[0]||'XUSB_GAMEPAD_LEFT_SHOULDER', curve_points:[[0,0],[1,1]]};
+  loadIntoEditor(editing); document.getElementById('editName').textContent='(new)';
+  toast('New profile — set a name and Save', 'info');
+}
+function duplicateProfile() {
+  if (!editing) return;
+  const copy = JSON.parse(JSON.stringify(editing)); copy.name = (editing.name||'profile')+'-copy';
+  editing = copy; loadIntoEditor(copy); document.getElementById('editName').textContent='(new)';
+  toast(`Duplicated as “${copy.name}” — Save to keep`, 'info');
+}
+async function deleteProfile() {
+  const name = document.getElementById('fName').value.trim();
+  if (!confirm('Delete '+name+'?')) return;
+  try { await api('/api/profiles/'+encodeURIComponent(name),{method:'DELETE'}); editing=null; await loadProfiles();
+    toast(`Deleted “${name}”`); }
+  catch(e){ toast('Delete failed: '+e.message, 'error', 4500); }
+}
+
+// ---------------- Config ----------------
+async function loadConfig() {
+  config = await api('/api/config');
+  document.getElementById('autoSwitch').checked = !!config.auto_switch;
+  renderConfig();
+}
+function renderConfig() {
+  if (!config || config.amount_of_magnets == null) return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('cfgMagnets', config.amount_of_magnets);
+  set('cfgRevCm', config.one_revolution_cm);
+  set('cfgWeight', config.weight_kg ?? '');
+  set('cfgIncline', config.incline_pct ?? 0);
+  const metric = document.getElementById('cfgMetric'); if (metric) metric.checked = config.metric_units !== false;
+  const sauto = document.getElementById('cfgSessionAuto'); if (sauto) sauto.checked = config.session_auto !== false;
+  const cmp = (config.one_revolution_cm || 0) / (config.amount_of_magnets || 1);
+  const out = document.getElementById('cfgCmPerPulse'); if (out) out.textContent = cmp.toFixed(3);
+  renderSerialSelect();
+}
+let serialPorts = [];
+async function loadSerialPorts(){ try { serialPorts = await api('/api/serial-ports'); } catch(e){ serialPorts = []; } renderSerialSelect(); }
+function renderSerialSelect(){
+  const sel = document.getElementById('cfgSerial'); if (!sel) return;
+  const current = config.serial_port || '';
+  const opts = serialPorts.map(p => ({v:p.device, l:`${p.device} — ${p.description}`}));
+  // ensure the currently-configured port is selectable even if not detected now
+  if (current && !opts.some(o => o.v === current)) opts.unshift({v:current, l:`${current} (not detected)`});
+  if (!opts.length) opts.push({v:current, l: current || '(no ports found)'});
+  sel.innerHTML = opts.map(o => `<option value="${o.v}"${o.v===current?' selected':''}>${o.l}</option>`).join('');
+}
+async function patchConfig(patch){
+  try {
+    config = await api('/api/config',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)});
+    renderConfig();
+    toast('Settings saved', 'ok', 1500);
+  } catch(e){ toast('Save failed: '+e.message, 'error', 4500); }
+}
+function toggleAutoSwitch(v){ patchConfig({auto_switch:v}); }
+function saveConfigField(k,v){ patchConfig({[k]: v===''?null:+v}); }
+function saveConfigText(k,v){ patchConfig({[k]: v.trim()}); }
+
+// Incline calculator: length = straight-line distance between the two measured points.
+let _icGrade = null;
+function calcIncline(){
+  const f=+document.getElementById('icFront').value, b=+document.getElementById('icBack').value, L=+document.getElementById('icLen').value;
+  const rise=Math.abs(f-b);
+  const G=document.getElementById('icGrade'), A=document.getElementById('icAngle'), R=document.getElementById('icRise'), E=document.getElementById('icEffort');
+  R.textContent = isFinite(rise) ? rise.toFixed(1) : '—';
+  if(!(L>0) || L<=rise || !isFinite(rise)){ G.textContent='—'; A.textContent='—'; E.textContent = L&&L<=rise?'Distance must be larger than the height difference.':''; _icGrade=null; return; }
+  const angle=Math.asin(rise/L)*180/Math.PI;
+  const run=Math.sqrt(L*L-rise*rise);
+  const grade=rise/run*100;
+  G.textContent=grade.toFixed(1)+'%'; A.textContent=angle.toFixed(1)+'°';
+  _icGrade=+grade.toFixed(1);
+  E.innerHTML = `≈ <b>${(1+0.18*grade).toFixed(1)}×</b> the walking effort of flat ground.`;
+}
+function useIncline(){
+  if(_icGrade==null) return toast('Enter valid measurements first', 'error');
+  document.getElementById('cfgIncline').value=_icGrade;
+  patchConfig({incline_pct:_icGrade});
+  toast(`Incline set to ${_icGrade}%`);
+}
+async function reconnectSerial(){
+  const port = document.getElementById('cfgSerial').value;
+  const st = document.getElementById('serialStatus');
+  st.innerHTML = `Connecting to <b>${port}</b>…`;
+  try {
+    const r = await api('/api/reconnect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({serial_port:port})});
+    if (r.ok) {
+      st.innerHTML = `✅ Connected to <b>${port}</b>.` + (r.gamepad_null ? ' ⚠️ vgamepad/ViGEmBus not available — no controller output.' : ' Gamepad active.');
+      toast(`Connected to ${port}` + (r.gamepad_null ? ' (no gamepad)' : ''), r.gamepad_null ? 'info' : 'ok', 3500);
+    } else {
+      st.innerHTML = `❌ Could not open <b>${port}</b> — ${r.error}. Still in mock mode.`;
+      toast(`Could not open ${port} — still in mock`, 'error', 4500);
+    }
+    config = await api('/api/config');
+  } catch(e){ st.innerHTML = '❌ Reconnect failed: '+e.message; toast('Reconnect failed: '+e.message, 'error', 4500); }
+}
+
+// ---------------- Curve editor ----------------
+const cv = () => document.getElementById('curve');
+const PAD = {l:52,r:20,t:16,b:34};
+let drag = -1;
+
+function plot() {
+  const c = cv(), w=c.width, h=c.height;
+  return { x0:PAD.l, y0:h-PAD.b, pw:w-PAD.l-PAD.r, ph:h-PAD.t-PAD.b };
+}
+function dataToPx(nx, ny){ const p=plot(); return [p.x0+nx*p.pw, p.y0-ny*p.ph]; }
+function pxToData(px, py){ const p=plot(); return [Math.min(1,Math.max(0,(px-p.x0)/p.pw)), Math.min(1,Math.max(0,(p.y0-py)/p.ph))]; }
+
+function drawCurve() {
+  if (!editing) return;
+  const c = cv(); if (!c) return;
+  const ctx = c.getContext('2d'); const p = plot();
+  ctx.clearRect(0,0,c.width,c.height);
+  const css = getComputedStyle(document.documentElement);
+  const border = css.getPropertyValue('--border')||'#333';
+  const accent = css.getPropertyValue('--accent')||'#2f81f7';
+  const muted = css.getPropertyValue('--muted')||'#888';
+  const maxPps = +document.getElementById('fMaxPps').value || 30;
+
+  // axes + grid
+  ctx.strokeStyle = border; ctx.lineWidth=1; ctx.fillStyle = muted.trim(); ctx.font='10px system-ui';
+  ctx.beginPath(); ctx.moveTo(p.x0,p.t=PAD.t); ctx.lineTo(p.x0,p.y0); ctx.lineTo(p.x0+p.pw,p.y0); ctx.stroke();
+  for (let i=0;i<=4;i++){ const gy=p.y0-i/4*p.ph; ctx.globalAlpha=.25; ctx.beginPath(); ctx.moveTo(p.x0,gy); ctx.lineTo(p.x0+p.pw,gy); ctx.stroke(); ctx.globalAlpha=1;
+    ctx.fillText((i*25)+'%', 6, gy+3); }
+  for (let i=0;i<=5;i++){ const gx=p.x0+i/5*p.pw; ctx.fillText((i/5*maxPps).toFixed(0), gx-6, p.y0+16); }
+  ctx.save(); ctx.translate(12,p.t+p.ph/2); ctx.rotate(-Math.PI/2); ctx.fillText('Joystick %',0,0); ctx.restore();
+  ctx.fillText('Pulses/s', p.x0+p.pw/2-18, c.height-4);
+
+  // deadzone line (input side) — draw as vertical guide at deadzone*maxPps? deadzone is on speed 0..1
+  const dz = +document.getElementById('fDeadzone').value||0;
+  const [dzx] = dataToPx(dz,0);
+  ctx.strokeStyle='#a371f7'; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(dzx,p.t); ctx.lineTo(dzx,p.y0); ctx.stroke();
+  // sprint threshold (output side) horizontal
+  const rt = +document.getElementById('fRunThresh').value||0.9;
+  const [,rty] = dataToPx(0,rt);
+  ctx.strokeStyle='#f778ba'; ctx.beginPath(); ctx.moveTo(p.x0,rty); ctx.lineTo(p.x0+p.pw,rty); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // curve polyline
+  const pts = editing.curve_points;
+  ctx.strokeStyle=accent.trim(); ctx.lineWidth=2; ctx.beginPath();
+  for (let i=0;i<=100;i++){ const nx=i/100, ny=interpolateCurve(nx,pts); const [X,Y]=dataToPx(nx,ny); i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
+  ctx.stroke();
+
+  // control points
+  pts.forEach(([nx,ny],i)=>{ const [X,Y]=dataToPx(nx,ny); ctx.fillStyle=accent.trim();
+    ctx.beginPath(); ctx.arc(X,Y,5,0,7); ctx.fill(); });
+
+  // live dot
+  if (state && state.filtered_speed!=null) {
+    const [X,Y]=dataToPx(Math.min(1,state.filtered_speed), Math.min(1,state.curved));
+    ctx.fillStyle='#3fb950'; ctx.beginPath(); ctx.arc(X,Y,6,0,7); ctx.fill();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1; ctx.stroke();
+  }
+}
+
+function curveMouse(e){ const r=cv().getBoundingClientRect(); const sx=cv().width/r.width, sy=cv().height/r.height;
+  return [ (e.clientX-r.left)*sx, (e.clientY-r.top)*sy ]; }
+function nearestPoint(px,py){ let best=-1,bd=14; editing.curve_points.forEach(([nx,ny],i)=>{ const [X,Y]=dataToPx(nx,ny);
+  const d=Math.hypot(X-px,Y-py); if(d<bd){bd=d;best=i;} }); return best; }
+
+function initCurveEvents() {
+  const c = cv();
+  c.addEventListener('mousedown', e=>{ if(e.button!==0)return; const [px,py]=curveMouse(e); drag=nearestPoint(px,py); });
+  window.addEventListener('mousemove', e=>{ if(drag<0||!editing)return; const [px,py]=curveMouse(e); let [nx,ny]=pxToData(px,py);
+    const last=editing.curve_points.length-1;
+    if(drag===0) nx=0; else if(drag===last) nx=1;   // endpoints x-locked
+    editing.curve_points[drag]=[+nx.toFixed(4),+ny.toFixed(4)];
+    editing.curve_points.sort((a,b)=>a[0]-b[0]); drag=editing.curve_points.findIndex(p=>p[0]===+nx.toFixed(4)&&p[1]===+ny.toFixed(4));
+    drawCurve(); });
+  window.addEventListener('mouseup', ()=>{ drag=-1; });
+  c.addEventListener('dblclick', e=>{ const [px,py]=curveMouse(e); const [nx,ny]=pxToData(px,py);
+    editing.curve_points.push([+nx.toFixed(4),+ny.toFixed(4)]); editing.curve_points.sort((a,b)=>a[0]-b[0]); drawCurve(); });
+  c.addEventListener('contextmenu', e=>{ e.preventDefault(); const [px,py]=curveMouse(e); const i=nearestPoint(px,py);
+    const last=editing.curve_points.length-1; if(i>0&&i<last){ editing.curve_points.splice(i,1); drawCurve(); } });
+}
+
+// ---------------- init ----------------
+async function init() {
+  buttons = await api('/api/buttons').catch(()=>[]);
+  document.getElementById('fRunButton').innerHTML = buttons.map(b=>`<option value="${b}">${b}</option>`).join('');
+  try { state = await api('/api/status'); } catch(e){}
+  await loadConfig();
+  await loadSerialPorts();
+  await loadWindows();
+  await loadProfiles();
+  await loadSessions();
+  initCurveEvents();
+  onStatus();                                  // paint immediately from one-shot status
+  if (location.hash === '#game') showTab('game');
+  if (location.hash === '#config') showTab('config');
+  if (location.hash.startsWith('#session=')) openChart(decodeURIComponent(location.hash.slice(9)));
+  connectWs();
+}
+init();
+</script>
+</body>
+</html>

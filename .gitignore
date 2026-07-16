@@ -11,6 +11,8 @@ __pycache__/
 
 # Runtime data (regenerated on every run)
 distance_log.json
+python/data/
+curve.json
 
 # Historical references (kept locally for inspiration, not in VCS)
 .legacy/
