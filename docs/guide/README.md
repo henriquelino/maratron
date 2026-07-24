@@ -34,15 +34,12 @@ flowchart LR
 
 ## Parts list
 
-> FILL IN: Replace each item with the exact part you used. Add a model number or a link.
+The list below is what this build used. Substitute equivalents freely; only a magnet sensor, the magnets, and an interrupt-capable board are essential.
 
-- An ESP32 development board. Any ESP32 with Bluetooth works. An ESP32-S2 has no Bluetooth.
-  > FILL IN: your exact ESP32 model.
-- A reed switch: a magnetic on/off switch with two wires. It closes when a magnet passes and pulls the signal line to ground. A hall-effect sensor that pulls to ground also works.
-  > FILL IN: your exact sensor part.
-- Magnets for the roller.
-  > FILL IN: magnet type, size, and how many you fitted.
-- Hook-up wire and a way to fix the sensor near the roller.
+- A microcontroller with an interrupt-capable input. This build uses an **ESP32-C3 Super Mini**. Any ESP32 works, and any other MCU with an interrupt pin works with small changes to the firmware. Bluetooth is not needed today; it only matters for the planned FTMS feature.
+- A reed switch: a two-wire magnetic on/off switch that pulls the signal line to ground when a magnet passes. This build reuses the treadmill's **original built-in reed switch**, so there is no separate part to buy. A hall-effect sensor that pulls to ground also works.
+- Magnets for the roller disc. This build uses **11 small neodymium magnets**. Any small neodymium magnet works, as long as it reliably closes the reed switch; the count and even spacing matter more than the exact size.
+- A couple of jumper wires to connect the reed switch to the ESP32: one to GPIO 4, one to GND.
 - A USB cable from the ESP32 to the PC.
 
 ## Before you start

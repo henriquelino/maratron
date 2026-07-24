@@ -2,7 +2,11 @@
 
 Turn a manual (non-motorized) treadmill into game input: walk/run inside PC games and **PCVR**. A magnet on the belt roller passes a reed switch wired to an ESP32; the ESP32 counts pulses over USB serial, and a Python app translates pulses-per-second into either a **virtual Xbox controller** stick or a **SteamVR treadmill controller**, with a terminal-launched **web dashboard** for config and live metrics.
 
-> **Docs status (2026-07-19):** this README describes the current architecture. A dedicated *how-to-use* guide is planned. Deep dives already written: VR locomotion (`docs/vr-locomotion.md`), VR-compatible games (`docs/vr-compatible-games.md`), the SteamVR driver (`vr_driver/README.md`).
+<p align="center">
+  <a href="docs/guide/images/ui-treadmill-idle.png"><img src="docs/guide/images/ui-treadmill-idle.png" alt="The Maratron dashboard" width="820"></a>
+</p>
+
+> **Start here — the [Build and Use Guide](docs/guide/README.md)** walks through the whole project step by step: hardware build, software setup, calibration, game profiles, and VR. Deep dives: [VR locomotion](docs/vr-locomotion.md), [VR-compatible games](docs/vr-compatible-games.md), and the [SteamVR driver](vr_driver/README.md).
 
 ## What it does now
 
@@ -127,6 +131,14 @@ Most of the original roadmap (curve editor, profiles, auto-switching, distance/m
 - **FTMS / Octonic**: expose Maratron as an FTMS Bluetooth treadmill so on-headset apps (e.g. Octonic on Quest) read it directly. Decision: do it on the **ESP32** (BLE GATT server), not Windows. Next milestone.
 - **How-to-use guide**: a dedicated usage/walkthrough doc (planned).
 - **Dashboard polish**: expose the VR role selector (treadmill/left/right) now that Treadmill is the confirmed keep-both default.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup and the pull-request checklist, and the [Code of Conduct](CODE_OF_CONDUCT.md). Report bugs and ideas through the issue templates.
+
+## License
+
+Licensed under the [GNU General Public License v3.0](LICENSE). Copyright (C) 2026 Henrique Lino.
 
 ## Credits
 

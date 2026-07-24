@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Build and use guide
+    url: https://github.com/henriquelino/maratron/blob/main/docs/guide/README.md
+    about: How to build the rig, set up the software, calibrate, and play.
+  - name: Report a security issue
+    url: https://github.com/henriquelino/maratron/security/advisories/new
+    about: Please report vulnerabilities privately, not as a public issue.
