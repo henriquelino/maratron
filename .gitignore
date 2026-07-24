@@ -16,3 +16,7 @@ curve.json
 
 # Historical references (kept locally for inspiration, not in VCS)
 .legacy/
+
+# Local scratch / tooling (not shared)
+.claude/
+python/src/debug.py

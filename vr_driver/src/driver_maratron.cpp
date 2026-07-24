@@ -36,7 +36,7 @@ struct MaratronShared {
     float    joyX;       // -1..1
     float    joyY;       // -1..1 (forward)
     float    trigger;    // 0..1
-    uint32_t buttons;    // bit0=sprint, bit1=jump, bit2=stickClick
+    uint32_t buttons;    // bit0=grip, bit1=unused, bit2=stickClick
     uint32_t role;       // ETrackedControllerRole: 1=left 2=right 3=optout 4=treadmill
 };
 #pragma pack(pop)
@@ -46,7 +46,8 @@ static const wchar_t* kShmName = L"Local\\MaratronVRInput";
 static const DWORD    kShmSize = 48;             // region size (struct is 44, padded)
 static const double   kStaleMs = 400.0;          // no new seq for this long -> zero out
 
-enum : uint32_t { BTN_SPRINT = 1u << 0, BTN_JUMP = 1u << 1, BTN_STICK_CLICK = 1u << 2 };
+// Button bits must match vr_ipc.py. bit 1 is unused (no jump input on the controller).
+enum : uint32_t { BTN_SPRINT = 1u << 0, BTN_STICK_CLICK = 1u << 2 };
 
 class SharedMem {
 public:

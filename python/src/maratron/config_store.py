@@ -21,14 +21,12 @@ import threading
 from contextlib import contextmanager
 from datetime import datetime
 
-from .control import sample_two_segment_points
 from .models import (
     AppConfig,
     InclinePreset,
     Person,
     Profile,
     Session,
-    SprintMethod,
     Treadmill,
     grade_pct,
 )
@@ -36,20 +34,9 @@ from .models import (
 log = logging.getLogger("maratron.store")
 
 
-def _default_skyrim() -> Profile:
-    """The migrated hardcoded profile from the old treadmill.py."""
-    return Profile(
-        name="skyrim",
-        game_window="Skyrim",
-        max_pulses_per_second=110,
-        gain=1.2,
-        deadzone=0.01,
-        smoothing=0.6,
-        run_threshold=0.80,
-        sprint_method=SprintMethod.NONE,
-        run_button="XUSB_GAMEPAD_LEFT_SHOULDER",
-        curve_points=sample_two_segment_points(0.30, n=9),
-    )
+def _default_profile() -> Profile:
+    """A neutral starter profile created on a fresh install (uses model defaults)."""
+    return Profile(name="Default")
 
 
 class ConfigStore:
@@ -176,8 +163,8 @@ class ConfigStore:
 
         # Seed a default game profile on a truly fresh install.
         if self._count("profiles") == 0:
-            self._upsert_profile(_default_skyrim())
-            log.info("seeded default 'skyrim' profile")
+            self._upsert_profile(_default_profile())
+            log.info("seeded default profile")
 
         # Repoint any profiles/sessions that don't yet reference a person/treadmill.
         persons = self.load_persons()

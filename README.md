@@ -1,20 +1,20 @@
 # Maratron
 
-Turn a manual (non-motorized) treadmill into game input: walk/run inside PC games and **PCVR**. A magnet on the belt roller passes a hall sensor wired to an ESP32; the ESP32 counts pulses over USB serial, and a Python app translates pulses-per-second into either a **virtual Xbox controller** stick or a **SteamVR treadmill controller**, with a terminal-launched **web dashboard** for config and live metrics.
+Turn a manual (non-motorized) treadmill into game input: walk/run inside PC games and **PCVR**. A magnet on the belt roller passes a reed switch wired to an ESP32; the ESP32 counts pulses over USB serial, and a Python app translates pulses-per-second into either a **virtual Xbox controller** stick or a **SteamVR treadmill controller**, with a terminal-launched **web dashboard** for config and live metrics.
 
 > **Docs status (2026-07-19):** this README describes the current architecture. A dedicated *how-to-use* guide is planned. Deep dives already written: VR locomotion (`docs/vr-locomotion.md`), VR-compatible games (`docs/vr-compatible-games.md`), the SteamVR driver (`vr_driver/README.md`).
 
 ## What it does now
 
 - **Web dashboard** (FastAPI + a single no-build HTML page), launched from the terminal and shown in a native window (pywebview) or your browser. Live **Treadmill** view (speed/distance) and **Config** (People, Treadmills, game Profiles, output).
-- **People & Treadmills data model.** A **Person** (weight/height/sex/age/stride) and a **Treadmill** (magnets, revolution distance, bed length, serial port, incline presets) are first-class entities. A game **Profile** belongs to a person and references a treadmill + incline preset, plus its control curve and output settings.
+- **People & Treadmills data model.** A **Person** (weight/height/stride) and a **Treadmill** (magnets, revolution distance, bed length, serial port, incline presets) are first-class entities. A game **Profile** belongs to a person and references a treadmill + incline preset, plus its control curve and output settings.
 - **Sessions & metrics.** Auto start/stop on movement (or manual save/discard), a minimum-distance filter, per-person totals, an activity log with **incline/grade, elevation gained (climb), steps**, and **incline-aware calories** (ACSM). Session charts plot speed + cumulative climb.
 - **Outputs (pluggable).** `gamepad` (virtual Xbox 360 via vgamepad/ViGEmBus), `vr` (SteamVR treadmill controller via shared memory + the `vr_driver/` DLL), `both`, or `null`.
 - **PCVR locomotion: solved.** The treadmill drives smooth locomotion in SteamVR games with **both real controllers still live**. Verified on Dungeons of Eternity and Ancient Dungeon. See `docs/vr-locomotion.md`.
 
 ## Stack
 
-- **Sensor:** hall-effect / reed switch sensing magnets on the front roller (default 11 magnets, one revolution ≈ 12.9 cm of belt travel, configurable per treadmill in the dashboard).
+- **Sensor:** a reed switch (two-wire magnetic on/off switch) sensing magnets on the front roller (default 11 magnets, one revolution ≈ 12.9 cm of belt travel, configurable per treadmill in the dashboard). A hall-effect sensor that pulls to ground also works.
 - **MCU:** ESP32, Arduino framework. Single sketch in `arduino/treadmill_to_py/`.
 - **Transport:** USB serial @ 115200 baud, request/response (no streaming).
 - **Host:** Python 3.10+ on Windows.
@@ -32,14 +32,14 @@ Turn a manual (non-motorized) treadmill into game input: walk/run inside PC game
 flowchart LR
     subgraph Treadmill["Treadmill (physical)"]
         Roller["Front roller<br/>magnets"]
-        Hall["Hall / reed sensor"]
-        Roller -- "magnet passes" --> Hall
+        Reed["Reed switch"]
+        Roller -- "magnet passes" --> Reed
     end
     subgraph ESP["ESP32 (firmware)"]
-        ISR["hallISR()<br/>2ms debounce"]
+        ISR["reedISR()<br/>2ms debounce"]
         Counter["pulseCount"]
         SerialFW["Serial @ 115200<br/>R / C protocol"]
-        Hall -- "FALLING edge GPIO 4" --> ISR --> Counter --> SerialFW
+        Reed -- "FALLING edge GPIO 4" --> ISR --> Counter --> SerialFW
     end
     subgraph PC["Windows host: maratron app"]
         Engine["engine.py<br/>control loop"]
@@ -59,11 +59,11 @@ flowchart LR
 
 ## Hardware & firmware
 
-- Hall sensor signal → ESP32 GPIO `4` (`HALL_PIN`), `INPUT_PULLUP`; the sensor pulls to GND on each magnet pass, firing a `FALLING` interrupt.
+- Reed switch signal → ESP32 GPIO `4` (`REED_PIN`), `INPUT_PULLUP`; the switch pulls to GND on each magnet pass, firing a `FALLING` interrupt.
 - Magnets around the front roller; each pulse = `one_revolution_cm / magnets` of belt travel. Set these per treadmill in the dashboard (Config → Treadmills), not in code.
 
 **Serial protocol** (`arduino/treadmill_to_py/treadmill_to_py.ino`):
-- `pulseCount` is a `volatile uint32_t` incremented in `hallISR()` with a 2 ms software debounce.
+- `pulseCount` is a `volatile uint32_t` incremented in `reedISR()` with a 2 ms software debounce.
 - Host sends `R` → ESP32 replies `pulseCount,millis()\n`; host sends `C` → resets the counter and replies `ACK:RESET`.
 - The count is absolute/monotonic; the host computes deltas, so a dropped frame doesn't lose steps.
 
@@ -113,7 +113,7 @@ python/src/maratron/           the app package
   vr_ipc.py        shared-memory bridge to the C++ SteamVR driver
   window_watcher.py foreground-window watcher (auto profile switch)
   web/index.html   the dashboard (no build step)
-python/src/treadmill.py, max_pps_view.py, debug.py   legacy single-file scripts (pre-dashboard)
+.legacy/                       retired code: pre-dashboard scripts (treadmill.py, max_pps_view.py), old mouse-sensor projects
 vr_driver/                     SteamVR (OpenVR) driver + resources + no-headset test tools
 docs/                          VR locomotion, VR-compatible games
 ```
@@ -130,7 +130,7 @@ Most of the original roadmap (curve editor, profiles, auto-switching, distance/m
 
 ## Credits
 
-Started from earlier mouse-sensor VR-treadmill projects (same idea: read belt motion, drive a virtual joystick): [ZeGollyGosh/VR-Treadmill](https://github.com/ZeGollyGosh/VR-Treadmill), [Mark-Renzi/VR-Treadmill](https://github.com/Mark-Renzi/VR-Treadmill). Maratron's divergence is a hall-effect sensor + ESP32 (no optical-mouse drift/recenter/acceleration issues) plus the dashboard, data model, and PCVR locomotion.
+Started from earlier mouse-sensor VR-treadmill projects (same idea: read belt motion, drive a virtual joystick): [ZeGollyGosh/VR-Treadmill](https://github.com/ZeGollyGosh/VR-Treadmill), [Mark-Renzi/VR-Treadmill](https://github.com/Mark-Renzi/VR-Treadmill). Maratron's divergence is a reed switch + ESP32 (no optical-mouse drift/recenter/acceleration issues) plus the dashboard, data model, and PCVR locomotion.
 
 ## Notes / gotchas
 

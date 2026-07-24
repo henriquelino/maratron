@@ -31,30 +31,17 @@ class SprintMethod(str, Enum):
     CLICK_RELEASE = "click_release"
 
 
-# Button names offered in the UI dropdown. These mirror ``vg.XUSB_BUTTON`` member
-# names; hardware.py resolves them via getattr so this list stays dependency-free.
-RUN_BUTTONS = [
-    "XUSB_GAMEPAD_LEFT_SHOULDER",
-    "XUSB_GAMEPAD_RIGHT_SHOULDER",
-    "XUSB_GAMEPAD_LEFT_THUMB",
-    "XUSB_GAMEPAD_RIGHT_THUMB",
-    "XUSB_GAMEPAD_A",
-    "XUSB_GAMEPAD_B",
-    "XUSB_GAMEPAD_X",
-    "XUSB_GAMEPAD_Y",
-]
-
 # Friendly, output-aware button catalog for the UI. ``value`` is the stored
 # XUSB_GAMEPAD_* name (unchanged, resolved in hardware.py); ``label`` is the
-# gamepad-friendly name; ``vr`` is the distinct VR action this maps to (via
-# vr_ipc.BUTTON_BITS) or None when VR collapses it onto another action. VR only has
-# three distinct bits (sprint / jump / stick-click), so only three entries carry a vr label.
+# gamepad-friendly name; ``vr`` names the real SteamVR controller input this maps to
+# (via vr_ipc.BUTTON_BITS), or None when the driver has no distinct input for it. The
+# driver exposes only two usable button inputs, so only two entries carry a vr label.
 BUTTON_CATALOG = [
-    {"value": "XUSB_GAMEPAD_LEFT_SHOULDER",  "label": "Left Shoulder (LB)",    "vr": "Sprint"},
+    {"value": "XUSB_GAMEPAD_LEFT_SHOULDER",  "label": "Left Shoulder (LB)",    "vr": "Grip click"},
     {"value": "XUSB_GAMEPAD_RIGHT_SHOULDER", "label": "Right Shoulder (RB)",   "vr": None},
     {"value": "XUSB_GAMEPAD_LEFT_THUMB",     "label": "Left Stick click (L3)", "vr": "Thumbstick click"},
     {"value": "XUSB_GAMEPAD_RIGHT_THUMB",    "label": "Right Stick click (R3)", "vr": None},
-    {"value": "XUSB_GAMEPAD_A",              "label": "A",                     "vr": "Jump"},
+    {"value": "XUSB_GAMEPAD_A",              "label": "A",                     "vr": None},
     {"value": "XUSB_GAMEPAD_B",              "label": "B",                     "vr": None},
     {"value": "XUSB_GAMEPAD_X",              "label": "X",                     "vr": None},
     {"value": "XUSB_GAMEPAD_Y",              "label": "Y",                     "vr": None},
@@ -72,8 +59,6 @@ class Person(BaseModel):
     name: str = Field(..., description="Unique person name / key")
     weight_kg: float | None = None
     height_cm: float | None = None
-    sex: Literal["m", "f", "other", "unspecified"] = "unspecified"
-    age: int | None = None
     stride_cm: float | None = Field(
         None, description="Walking stride length; set directly or via the calibrator."
     )

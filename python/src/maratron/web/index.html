@@ -322,12 +322,6 @@
       </div>
       <div class="fields2">
         <div class="field"><label>Height (cm)</label><input id="pHeight" type="number" step="0.5" /></div>
-        <div class="field"><label>Age</label><input id="pAge" type="number" step="1" /></div>
-      </div>
-      <div class="fields2">
-        <div class="field"><label>Sex</label><select id="pSex">
-          <option value="unspecified">—</option><option value="m">male</option>
-          <option value="f">female</option><option value="other">other</option></select></div>
         <div class="field"><label>Stride (cm)</label><input id="pStride" type="number" step="any" /></div>
       </div>
       <div class="hint">Stride calibrator: walk a known distance counting your steps.</div>
@@ -1031,13 +1025,13 @@ function loadPersonIntoEditor(p){
   if(!p) return; editingPerson = JSON.parse(JSON.stringify(p));
   const set=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;};
   set('pName',p.name); set('pWeight',p.weight_kg??''); set('pHeight',p.height_cm??'');
-  set('pAge',p.age??''); set('pSex',p.sex||'unspecified'); set('pStride',p.stride_cm??'');
+  set('pStride',p.stride_cm??'');
   renderPersonSelect(p.name);
 }
 function readPersonEditor(){
   const num=id=>{const v=document.getElementById(id).value; return v===''?null:+v;};
   return { name:document.getElementById('pName').value.trim(), weight_kg:num('pWeight'),
-    height_cm:num('pHeight'), age:num('pAge'), sex:document.getElementById('pSex').value, stride_cm:num('pStride') };
+    height_cm:num('pHeight'), stride_cm:num('pStride') };
 }
 async function savePerson(){
   const p=readPersonEditor(); if(!p.name) return toast('Person name required','error');
@@ -1047,7 +1041,7 @@ async function savePerson(){
     await loadPersons(); loadPersonIntoEditor(p); toast(`Person “${p.name}” saved`);
   }catch(e){ toast('Save failed: '+e.message,'error',4500); }
 }
-function newPerson(){ editingPerson=null; loadPersonIntoEditor({name:'',sex:'unspecified'}); editingPerson={name:''}; toast('New person — fill in and Save','info'); }
+function newPerson(){ editingPerson=null; loadPersonIntoEditor({name:''}); editingPerson={name:''}; toast('New person — fill in and Save','info'); }
 async function deletePerson(){ const n=document.getElementById('pName').value.trim(); if(!n)return; if(!confirm('Delete person '+n+'?'))return;
   try{ await api('/api/persons/'+encodeURIComponent(n),{method:'DELETE'}); editingPerson=null; await loadPersons(); toast('Deleted '+n);}catch(e){toast('Delete failed: '+e.message,'error',4500);} }
 async function activatePersonSelected(){ const n=decodeURIComponent(document.getElementById('personSelect').value); await _activatePerson(n); }

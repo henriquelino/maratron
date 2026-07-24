@@ -180,7 +180,7 @@ class VRGamepadOutput:
         self._joy_y = -y if self._invert else y
 
     def _bit(self, name: str) -> int:
-        return self._bits.get(name, 1)  # default: sprint (bit0)
+        return self._bits.get(name, 1)  # default: grip (bit0)
 
     def press(self, button_name: str) -> None:
         self._buttons |= self._bit(button_name)

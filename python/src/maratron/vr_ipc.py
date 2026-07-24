@@ -12,7 +12,7 @@ Struct (48 bytes, little-endian, packed):
     float  joyX       # -1..1
     float  joyY       # -1..1  (forward)
     float  trigger    # 0..1
-    uint32 buttons    # bit0=sprint, bit1=jump, bit2=stickClick
+    uint32 buttons    # bit0=grip, bit1=unused, bit2=stickClick
     uint32 reserved
 """
 
@@ -22,6 +22,8 @@ import logging
 import mmap
 import struct
 
+from .models import BUTTON_CATALOG
+
 log = logging.getLogger("maratron.vr")
 
 MAGIC = 0x4D545652
@@ -30,23 +32,22 @@ TAGNAME = "Local\\MaratronVRInput"
 _FMT = "<IIQdfffII"          # 4+4+8+8+4+4+4+4+4 = 44 -> struct pads? see SIZE
 SIZE = 48                    # fixed shared region size
 
-BTN_SPRINT = 1 << 0
-BTN_JUMP = 1 << 1
-BTN_STICK_CLICK = 1 << 2
+BTN_SPRINT = 1 << 0       # driver maps this to /input/grip/click (a real controller button)
+# bit 1 is unused: the VR controller has no "jump" input (this was a phantom mapping)
+BTN_STICK_CLICK = 1 << 2  # driver maps this to /input/joystick/click
 
 # SteamVR ETrackedControllerRole values (see openvr_driver.h).
 ROLE_INT = {"invalid": 0, "left": 1, "right": 2, "optout": 3, "treadmill": 4}
 
-# Map profile run_button names to VR button bits (fallback: sprint).
+# The VR input each catalog VR-label drives. models.BUTTON_CATALOG is the single source
+# of truth for the button list and which buttons have a VR action; we derive the
+# name->bit map from it so the two never drift. A run_button whose catalog entry has no
+# VR label is absent here and falls back to grip (see hardware.py _bit).
+_VR_LABEL_BITS = {"Grip click": BTN_SPRINT, "Thumbstick click": BTN_STICK_CLICK}
 BUTTON_BITS = {
-    "XUSB_GAMEPAD_LEFT_SHOULDER": BTN_SPRINT,
-    "XUSB_GAMEPAD_RIGHT_SHOULDER": BTN_SPRINT,
-    "XUSB_GAMEPAD_LEFT_THUMB": BTN_STICK_CLICK,
-    "XUSB_GAMEPAD_RIGHT_THUMB": BTN_STICK_CLICK,
-    "XUSB_GAMEPAD_A": BTN_JUMP,
-    "XUSB_GAMEPAD_B": BTN_SPRINT,
-    "XUSB_GAMEPAD_X": BTN_SPRINT,
-    "XUSB_GAMEPAD_Y": BTN_JUMP,
+    entry["value"]: _VR_LABEL_BITS[entry["vr"]]
+    for entry in BUTTON_CATALOG
+    if entry.get("vr") in _VR_LABEL_BITS
 }
 
 
