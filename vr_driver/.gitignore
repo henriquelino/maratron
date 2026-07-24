@@ -1,0 +1,4 @@
+build/
+third_party/openvr/
+maratron/bin/win64/*.dll
+maratron/bin/win64/*.pdb

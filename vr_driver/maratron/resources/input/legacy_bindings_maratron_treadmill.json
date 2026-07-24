@@ -1,0 +1,35 @@
+{
+   "bindings": {
+      "/actions/legacy": {
+         "sources": [
+            {
+               "inputs": {
+                  "position": { "output": "/actions/legacy/in/left_axis0_value" },
+                  "click": { "output": "/actions/legacy/in/left_axis0_press" },
+                  "touch": { "output": "/actions/legacy/in/left_axis0_touch" }
+               },
+               "mode": "joystick",
+               "path": "/user/treadmill/input/joystick"
+            },
+            {
+               "inputs": {
+                  "pull": { "output": "/actions/legacy/in/left_axis1_value" },
+                  "touch": { "output": "/actions/legacy/in/left_axis1_touch" }
+               },
+               "mode": "trigger",
+               "path": "/user/treadmill/input/trigger"
+            },
+            {
+               "inputs": {
+                  "click": { "output": "/actions/legacy/in/left_grip_press" }
+               },
+               "mode": "button",
+               "path": "/user/treadmill/input/grip"
+            }
+         ]
+      }
+   },
+   "controller_type": "maratron_treadmill",
+   "description": "",
+   "name": "Default bindings for Maratron treadmill (routes joystick to LEFT hand axis0)"
+}

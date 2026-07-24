@@ -1,0 +1,29 @@
+{
+  "jsonid": "input_profile",
+  "controller_type": "maratron_treadmill",
+  "legacy_profile": "maratron_treadmill",
+  "legacy_binding": "{maratron}/input/legacy_bindings_maratron_treadmill.json",
+  "input_bindingui_mode": "single_device",
+  "input_bindingui_right": {
+    "image": "{maratron}/icons/maratron_wand.svg"
+  },
+  "input_source": {
+    "/input/joystick": {
+      "type": "joystick",
+      "binding_image_point": [100, 100],
+      "click": true,
+      "touch": true,
+      "order": 1
+    },
+    "/input/trigger": {
+      "type": "trigger",
+      "binding_image_point": [100, 100],
+      "order": 2
+    },
+    "/input/grip": {
+      "type": "button",
+      "binding_image_point": [100, 100],
+      "order": 3
+    }
+  }
+}

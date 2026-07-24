@@ -16,8 +16,8 @@ from typing import Callable
 
 from . import hardware
 from .control import ControlState, JOY_MAX, step
-from .models import AppConfig, EngineStatus, Profile
-from .session import SessionTracker
+from .models import AppConfig, EngineStatus, Person, Profile, Treadmill
+from .session import Context, SessionTracker
 
 log = logging.getLogger("maratron.engine")
 
@@ -31,11 +31,15 @@ class TreadmillEngine:
         self,
         config: AppConfig,
         profiles: dict[str, Profile],
+        treadmills: dict[str, Treadmill] | None = None,
+        persons: dict[str, Person] | None = None,
         distance_flush: Callable[[int, str | None], None] | None = None,
         session_finalize: Callable | None = None,
     ) -> None:
         self._config = config
         self._profiles = dict(profiles)
+        self._treadmills = dict(treadmills or {})
+        self._persons = dict(persons or {})
         self._distance_flush = distance_flush
         self._focus_getter: Callable[[], str] = lambda: ""
         self._tracker = SessionTracker(config, session_finalize or (lambda s: None))
@@ -49,24 +53,26 @@ class TreadmillEngine:
         self._status = EngineStatus(mock=config.mock, active_profile=self._active_name)
 
         self._state = ControlState()
-        self._gamepad = hardware.make_gamepad(config.mock)
+        self._open_port: str | None = None
+        self._gamepad = hardware.make_output(config, self._effective_output_mode())
         self._using_null = isinstance(self._gamepad, hardware.NullGamepadOutput)
         self._source = self._make_source()
 
     # ------------------------------------------------------------------ #
+    def _serial_port(self) -> str:
+        return self._active_treadmill().serial_port
+
     def _make_source(self) -> hardware.PulseSource:
         if self._config.mock:
             return self._make_mock_source()
+        port = self._serial_port()
         try:
-            src = hardware.SerialPulseSource(self._config.serial_port, self._config.baudrate)
-            log.info("serial connected on %s", self._config.serial_port)
+            src = hardware.SerialPulseSource(port, self._config.baudrate)
+            self._open_port = port
+            log.info("serial connected on %s", port)
             return src
         except Exception as e:  # noqa: BLE001
-            log.warning(
-                "serial port %s unavailable (%s); falling back to MOCK input",
-                self._config.serial_port,
-                e,
-            )
+            log.warning("serial port %s unavailable (%s); falling back to MOCK input", port, e)
             self._config.mock = True
             with self._lock:
                 self._status.mock = True
@@ -88,6 +94,34 @@ class TreadmillEngine:
             prof = Profile(name="default")
         return prof
 
+    def _active_treadmill(self) -> Treadmill:
+        prof = self._active_profile()
+        with self._lock:
+            t = self._treadmills.get(prof.treadmill) if prof.treadmill else None
+            if t is None and self._treadmills:
+                t = next(iter(self._treadmills.values()))
+        return t or Treadmill(name="default")
+
+    def _active_person(self) -> Person:
+        prof = self._active_profile()
+        with self._lock:
+            p = self._persons.get(prof.person) if prof.person else None
+            if p is None and self._config.active_person:
+                p = self._persons.get(self._config.active_person)
+        return p or Person(name="default")
+
+    def _active_context(self) -> Context:
+        prof = self._active_profile()
+        t = self._active_treadmill()
+        person = self._active_person()
+        return Context(
+            person=person.name if person.name != "default" else None,
+            treadmill=t.name if t.name != "default" else None,
+            weight_kg=person.weight_kg,
+            grade_pct=t.grade_for(prof.incline_preset),
+            stride_cm=person.effective_stride_cm(),
+        )
+
     # ------------------------------------------------------------------ #
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -97,6 +131,9 @@ class TreadmillEngine:
         self._thread.start()
 
     def stop(self) -> None:
+        if getattr(self, "_stopped", False):
+            return  # idempotent: window-close and FastAPI shutdown may both call this
+        self._stopped = True
         self._stop_evt.set()
         if self._thread:
             self._thread.join(timeout=2.0)
@@ -104,6 +141,11 @@ class TreadmillEngine:
             self._tracker.stop(time.monotonic())  # persist any in-progress session
         except Exception:  # noqa: BLE001
             pass
+        if hasattr(self._gamepad, "close"):
+            try:
+                self._gamepad.close()
+            except Exception:  # noqa: BLE001
+                pass
         with self._lock:
             total = self._status.total_pulses
             name = self._active_name
@@ -120,10 +162,36 @@ class TreadmillEngine:
 
     def set_active_profile(self, name: str) -> None:
         with self._lock:
-            if name in self._profiles:
-                self._active_name = name
-                self._config.active_profile = name
-                self._status.active_profile = name
+            if name not in self._profiles:
+                return
+            self._active_name = name
+            self._config.active_profile = name
+            self._status.active_profile = name
+            person = self._profiles[name].person
+            if person:
+                self._config.active_person = person
+        # Switch the output device to the new profile's output_mode (live; gamepad<->VR
+        # needs no SteamVR restart — the driver stays loaded, we just (re)open the writer).
+        self.rebuild_output()
+        # If the new profile's treadmill uses a different serial port, reconnect.
+        if not self._config.mock:
+            new_port = self._serial_port()
+            if self._open_port is not None and new_port != self._open_port:
+                log.info("active profile treadmill port changed %s -> %s; reconnecting",
+                         self._open_port, new_port)
+                self.reconnect(new_port)
+
+    def set_active_person(self, name: str) -> None:
+        with self._lock:
+            self._config.active_person = name
+
+    def update_treadmills(self, treadmills: dict[str, Treadmill]) -> None:
+        with self._lock:
+            self._treadmills = dict(treadmills)
+
+    def update_persons(self, persons: dict[str, Person]) -> None:
+        with self._lock:
+            self._persons = dict(persons)
 
     def set_mock_speed(self, value: float) -> None:
         self._mock_speed = float(value)
@@ -131,18 +199,36 @@ class TreadmillEngine:
     def set_focus_getter(self, getter: Callable[[], str]) -> None:
         self._focus_getter = getter
 
+    def _effective_output_mode(self) -> str:
+        """The active profile's output_mode, falling back to the global config default.
+        Caller must hold the lock if concurrent with the control loop (rebuild_output does)."""
+        prof = self._profiles.get(self._active_name)
+        return getattr(prof, "output_mode", None) or getattr(self._config, "output_mode", "gamepad")
+
+    def rebuild_output(self) -> None:
+        """Swap the control output live (after a profile switch or vr_invert_y change)."""
+        with self._lock:
+            old = self._gamepad
+            self._gamepad = hardware.make_output(self._config, self._effective_output_mode())
+        if old is not None and hasattr(old, "close"):
+            try:
+                old.close()
+            except Exception:  # noqa: BLE001
+                pass
+
     def start_session(self) -> None:
         prof = self._active_profile()
         self._tracker.start_manual(
             time.monotonic(), datetime.now(timezone.utc).isoformat(),
-            self._current_distance_m(), prof.name, prof.game_window,
+            self._current_distance_m(), prof.name, prof.game_window, self._active_context(),
         )
 
-    def stop_session(self):
-        return self._tracker.stop(time.monotonic())
+    def stop_session(self, save: bool = True) -> bool:
+        _, persisted = self._tracker.stop(time.monotonic(), force_save=save)
+        return persisted
 
     def _current_distance_m(self) -> float:
-        return self._state.total_pulses * self._config.distance_per_pulse_cm / 100.0
+        return self._state.total_pulses * self._active_treadmill().distance_per_pulse_cm / 100.0
 
     def reset_distance(self) -> None:
         self._source.reset()
@@ -159,10 +245,9 @@ class TreadmillEngine:
         without restarting. Safe to call while the loop is running — the loop picks up
         the new source/gamepad on its next iteration.
         """
-        if serial_port:
-            self._config.serial_port = serial_port
+        port = serial_port or self._serial_port()
         try:
-            new_source = hardware.SerialPulseSource(self._config.serial_port, self._config.baudrate)
+            new_source = hardware.SerialPulseSource(port, self._config.baudrate)
         except Exception as e:  # noqa: BLE001
             self._config.mock = True
             if not isinstance(self._source, hardware.MockPulseSource):
@@ -175,9 +260,9 @@ class TreadmillEngine:
             with self._lock:
                 self._status.mock = True
                 self._status.connected = False
-                self._status.error = f"could not open {self._config.serial_port}: {e}"
+                self._status.error = f"could not open {port}: {e}"
             log.warning("reconnect failed: %s", e)
-            return {"ok": False, "mock": True, "error": str(e), "port": self._config.serial_port}
+            return {"ok": False, "mock": True, "error": str(e), "port": port}
 
         # success — switch to real input (and real output if we were on a null pad)
         self._config.mock = False
@@ -186,6 +271,7 @@ class TreadmillEngine:
         old = self._source
         self._state = ControlState()  # fresh baseline for the new source
         self._source = new_source
+        self._open_port = port
         try:
             old.close()
         except Exception:  # noqa: BLE001
@@ -194,10 +280,8 @@ class TreadmillEngine:
         with self._lock:
             self._status.mock = False
             self._status.error = None
-        log.info("reconnected on %s (gamepad=%s)", self._config.serial_port,
-                 "null" if gamepad_null else "vgamepad")
-        return {"ok": True, "mock": False, "gamepad_null": gamepad_null,
-                "port": self._config.serial_port}
+        log.info("reconnected on %s (gamepad=%s)", port, "null" if gamepad_null else "vgamepad")
+        return {"ok": True, "mock": False, "gamepad_null": gamepad_null, "port": port}
 
     def update_profiles(self, profiles: dict[str, Profile]) -> None:
         with self._lock:
@@ -233,10 +317,12 @@ class TreadmillEngine:
                     self._gamepad.release(profile.run_button)
                 self._gamepad.update()
 
+                dpp = self._active_treadmill().distance_per_pulse_cm
+                ctx = self._active_context()
                 total = self._state.total_pulses
-                distance_cm = total * self._config.distance_per_pulse_cm
+                distance_cm = total * dpp
                 distance_m = distance_cm / 100.0
-                speed_kmh = _pps_to_kmh(result.pulses_per_sec, self._config.distance_per_pulse_cm)
+                speed_kmh = _pps_to_kmh(result.pulses_per_sec, dpp)
                 joystick_pct = round(result.joy_y / JOY_MAX * 100, 1)
 
                 # session tracking
@@ -251,7 +337,7 @@ class TreadmillEngine:
                 self._tracker.update(
                     now_mono, datetime.now(timezone.utc).isoformat(),
                     result.pulses_per_sec, distance_m, speed_kmh, joystick_pct,
-                    profile.name, profile.game_window, focused,
+                    profile.name, profile.game_window, focused, ctx,
                 )
                 snap = self._tracker.snapshot()
 
@@ -266,6 +352,9 @@ class TreadmillEngine:
                     self._status.distance_m = round(distance_m, 3)
                     self._status.distance_km = round(distance_cm / 100000.0, 5)
                     self._status.speed_kmh = round(speed_kmh, 2)
+                    self._status.grade_pct = round(ctx.grade_pct, 2)
+                    self._status.active_person = ctx.person
+                    self._status.active_treadmill = ctx.treadmill
                     self._status.game_focused = game_focused
                     self._status.error = None
                     for k, v in snap.items():

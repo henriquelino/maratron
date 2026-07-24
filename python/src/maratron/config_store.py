@@ -22,7 +22,16 @@ from contextlib import contextmanager
 from datetime import datetime
 
 from .control import sample_two_segment_points
-from .models import AppConfig, Profile, Session, SprintMethod
+from .models import (
+    AppConfig,
+    InclinePreset,
+    Person,
+    Profile,
+    Session,
+    SprintMethod,
+    Treadmill,
+    grade_pct,
+)
 
 log = logging.getLogger("maratron.store")
 
@@ -51,7 +60,7 @@ class ConfigStore:
         self._lock = threading.Lock()
         self._init_db()
         self._migrate_json()
-        self._seed_if_empty()
+        self._migrate_and_seed()
 
     # --------------------------- schema ----------------------------- #
     def _connect(self) -> sqlite3.Connection:
@@ -74,6 +83,8 @@ class ConfigStore:
         with self._lock, self._db() as c:
             c.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
             c.execute("CREATE TABLE IF NOT EXISTS profiles (name TEXT PRIMARY KEY, data TEXT)")
+            c.execute("CREATE TABLE IF NOT EXISTS persons (name TEXT PRIMARY KEY, data TEXT)")
+            c.execute("CREATE TABLE IF NOT EXISTS treadmills (name TEXT PRIMARY KEY, data TEXT)")
             c.execute(
                 "CREATE TABLE IF NOT EXISTS sessions ("
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT, data TEXT)"
@@ -127,12 +138,163 @@ class ConfigStore:
             log.info("imported %d sessions from sessions.json", imported)
             self._backup(sj)
 
-    def _seed_if_empty(self) -> None:
+    def _migrate_and_seed(self) -> None:
+        """Move legacy single-config hardware/body fields into a default Treadmill + Person,
+        seed defaults on a fresh install, and repoint existing profiles/sessions. Reads the
+        *raw* old app_config JSON (which still has the pre-refactor fields) before anything
+        rewrites it. Idempotent via the 'schema_v2' meta flag."""
+        old = {}
+        raw = self._meta_get("app_config")
+        if raw:
+            try:
+                old = json.loads(raw)
+            except Exception:  # noqa: BLE001
+                old = {}
+
+        # Default treadmill from old hardware fields (or model defaults on fresh install).
+        if self._count("treadmills") == 0:
+            front = float(old.get("incline_front_cm", 19.0))
+            back = float(old.get("incline_back_cm", 9.0))
+            span = float(old.get("incline_span_cm", 86.6))
+            grade = grade_pct(front, back, span)
+            t = Treadmill(
+                name="My Treadmill",
+                amount_of_magnets=int(old.get("amount_of_magnets", 11)),
+                one_revolution_cm=float(old.get("one_revolution_cm", 12.9)),
+                serial_port=str(old.get("serial_port", "COM7")),
+                front_height_cm=front,
+                span_cm=span,
+                presets=[InclinePreset(label=f"~{round(grade)}%", back_height_cm=back)],
+            )
+            self._upsert_treadmill(t)
+            log.info("seeded treadmill 'My Treadmill'")
+
+        # Default person from old weight (or empty on fresh install).
+        if self._count("persons") == 0:
+            self._upsert_person(Person(name="Me", weight_kg=old.get("weight_kg")))
+            log.info("seeded person 'Me'")
+
+        # Seed a default game profile on a truly fresh install.
         if self._count("profiles") == 0:
             self._upsert_profile(_default_skyrim())
             log.info("seeded default 'skyrim' profile")
-        if not self._meta_get("app_config"):
-            self.save_config(AppConfig())
+
+        # Repoint any profiles/sessions that don't yet reference a person/treadmill.
+        persons = self.load_persons()
+        treadmills = self.load_treadmills()
+        default_person = next(iter(persons), None)
+        default_tm = next(iter(treadmills), None)
+        preset0 = None
+        if default_tm and treadmills[default_tm].presets:
+            preset0 = treadmills[default_tm].presets[0].label
+
+        profiles = self.load_profiles()
+        changed = False
+        for p in profiles.values():
+            if p.person is None:
+                p.person, changed = default_person, True
+            if p.treadmill is None:
+                p.treadmill, changed = default_tm, True
+            if p.incline_preset is None and preset0:
+                p.incline_preset, changed = preset0, True
+        if changed:
+            self.save_profiles(profiles)
+
+        if not self._meta_get("schema_v2"):
+            self._tag_sessions(default_person, default_tm)
+            self._meta_set("schema_v2", "1")
+
+        # schema_v3: output_mode moved from the single global AppConfig onto each Profile.
+        # Backfill every existing profile with the old global value so behavior is preserved
+        # (before this, all profiles shared one global output_mode). One-shot, guarded.
+        if not self._meta_get("schema_v3"):
+            global_mode = old.get("output_mode", "gamepad")
+            profs = self.load_profiles()
+            if profs:
+                for p in profs.values():
+                    p.output_mode = global_mode
+                self.save_profiles(profs)
+            self._meta_set("schema_v3", "1")
+            log.info("migrated output_mode onto profiles (schema_v3, mode=%s)", global_mode)
+
+        # Normalise app_config to the new schema and ensure active_person is set.
+        cfg = self.load_config()  # drops legacy fields on validate
+        if cfg.active_person is None:
+            cfg.active_person = default_person
+        self.save_config(cfg)
+
+    def _tag_sessions(self, person: str | None, treadmill: str | None) -> None:
+        sessions = self.load_sessions()
+        if not sessions:
+            return
+        changed = False
+        for s in sessions:
+            if s.person is None:
+                s.person, changed = person, True
+            if s.treadmill is None:
+                s.treadmill, changed = treadmill, True
+        if changed:
+            self.clear_sessions()
+            for s in sessions:
+                self.append_session(s)
+
+    # --------------------------- persons ---------------------------- #
+    def load_persons(self) -> dict[str, Person]:
+        with self._lock, self._db() as c:
+            rows = c.execute("SELECT data FROM persons").fetchall()
+        out: dict[str, Person] = {}
+        for r in rows:
+            try:
+                p = Person.model_validate_json(r["data"])
+                out[p.name] = p
+            except Exception as e:  # noqa: BLE001
+                log.warning("invalid person row: %s", e)
+        return out
+
+    def save_persons(self, persons: dict[str, Person]) -> None:
+        with self._lock, self._db() as c:
+            c.execute("DELETE FROM persons")
+            c.executemany(
+                "INSERT INTO persons (name, data) VALUES (?, ?)",
+                [(p.name, p.model_dump_json()) for p in persons.values()],
+            )
+
+    def _upsert_person(self, p: Person) -> None:
+        with self._lock, self._db() as c:
+            c.execute(
+                "INSERT INTO persons (name, data) VALUES (?, ?) "
+                "ON CONFLICT(name) DO UPDATE SET data=excluded.data",
+                (p.name, p.model_dump_json()),
+            )
+
+    # --------------------------- treadmills ------------------------- #
+    def load_treadmills(self) -> dict[str, Treadmill]:
+        with self._lock, self._db() as c:
+            rows = c.execute("SELECT data FROM treadmills").fetchall()
+        out: dict[str, Treadmill] = {}
+        for r in rows:
+            try:
+                t = Treadmill.model_validate_json(r["data"])
+                out[t.name] = t
+            except Exception as e:  # noqa: BLE001
+                log.warning("invalid treadmill row: %s", e)
+        return out
+
+    def save_treadmills(self, treadmills: dict[str, Treadmill]) -> None:
+        with self._lock, self._db() as c:
+            c.execute("DELETE FROM treadmills")
+            c.executemany(
+                "INSERT INTO treadmills (name, data) VALUES (?, ?)",
+                [(t.name, t.model_dump_json()) for t in treadmills.values()],
+            )
+
+    def _upsert_treadmill(self, t: Treadmill) -> None:
+        with self._lock, self._db() as c:
+            c.execute(
+                "INSERT INTO treadmills (name, data) VALUES (?, ?) "
+                "ON CONFLICT(name) DO UPDATE SET data=excluded.data",
+                (t.name, t.model_dump_json()),
+            )
 
     # --------------------------- profiles --------------------------- #
     def load_profiles(self) -> dict[str, Profile]:

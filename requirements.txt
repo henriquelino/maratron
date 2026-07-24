@@ -1,5 +1,6 @@
-pyserial
-pydantic>=2
-fastapi
-uvicorn[standard]
-vgamepad  # optional at runtime; imported lazily (needs ViGEmBus). Safe to omit on dev boxes.
+pyserial==3.5
+pydantic==2.12.5
+fastapi==0.139.2
+uvicorn[standard]==0.51.0
+pywebview==6.2.1  # native app window (Windows uses Edge WebView2). Falls back to browser if absent.
+vgamepad==0.1.0   # optional at runtime; imported lazily (needs ViGEmBus). Safe to omit on dev boxes.

@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from .config_store import ConfigStore
 from .engine import TreadmillEngine
-from .models import RUN_BUTTONS, AppConfig, Profile
+from .models import BUTTON_CATALOG, AppConfig, Person, Profile, Treadmill
 
 WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 
@@ -61,12 +61,16 @@ def patch_config(patch: dict):
     for field in cfg.model_fields:
         setattr(cfg, field, getattr(validated, field))
     _store().save_config(cfg)
+    if any(k in patch for k in ("output_mode", "vr_invert_y", "vr_role")):
+        _engine().rebuild_output()
     return cfg
 
 
 @app.get("/api/buttons")
-def get_buttons() -> list[str]:
-    return RUN_BUTTONS
+def get_buttons() -> list[dict]:
+    """Friendly, output-aware button catalog: {value, label, vr}. The UI filters by the
+    profile's output mode (gamepad shows all; vr shows only entries with a non-null vr)."""
+    return BUTTON_CATALOG
 
 
 @app.get("/api/windows")
@@ -113,6 +117,8 @@ def create_profile(profile: Profile) -> Profile:
         raise HTTPException(409, "profile name already exists")
     app.state.profiles[profile.name] = profile
     _persist_profiles()
+    if app.state.config.active_profile == profile.name:
+        _engine().rebuild_output()  # a just-created profile that is already active
     return profile
 
 
@@ -125,6 +131,9 @@ def update_profile(name: str, profile: Profile) -> Profile:
         app.state.profiles.pop(name, None)
     app.state.profiles[profile.name] = profile
     _persist_profiles()
+    # If the active profile changed (e.g. its output_mode), swap the output device live.
+    if app.state.config.active_profile in (name, profile.name):
+        _engine().rebuild_output()
     return profile
 
 
@@ -147,8 +156,95 @@ def set_active_profile(body: ActiveProfileBody):
         raise HTTPException(404, "profile not found")
     _engine().set_active_profile(body.name)
     app.state.config.active_profile = body.name
+    prof = app.state.profiles[body.name]
+    if prof.person:
+        app.state.config.active_person = prof.person
     _store().save_config(app.state.config)
     return {"active": body.name}
+
+
+# --------------------------------------------------------------------------- #
+# Persons
+# --------------------------------------------------------------------------- #
+@app.get("/api/persons")
+def list_persons() -> list[Person]:
+    return list(app.state.persons.values())
+
+
+@app.post("/api/persons", status_code=201)
+def create_person(person: Person) -> Person:
+    if person.name in app.state.persons:
+        raise HTTPException(409, "person name already exists")
+    app.state.persons[person.name] = person
+    _persist_persons()
+    return person
+
+
+@app.put("/api/persons/{name}")
+def update_person(name: str, person: Person) -> Person:
+    if name not in app.state.persons:
+        raise HTTPException(404, "person not found")
+    if person.name != name:
+        app.state.persons.pop(name, None)
+    app.state.persons[person.name] = person
+    _persist_persons()
+    return person
+
+
+@app.delete("/api/persons/{name}")
+def delete_person(name: str):
+    if name not in app.state.persons:
+        raise HTTPException(404, "person not found")
+    del app.state.persons[name]
+    _persist_persons()
+    return {"ok": True}
+
+
+@app.post("/api/active-person")
+def set_active_person(body: ActiveProfileBody):
+    if body.name not in app.state.persons:
+        raise HTTPException(404, "person not found")
+    _engine().set_active_person(body.name)
+    app.state.config.active_person = body.name
+    _store().save_config(app.state.config)
+    return {"active": body.name}
+
+
+# --------------------------------------------------------------------------- #
+# Treadmills
+# --------------------------------------------------------------------------- #
+@app.get("/api/treadmills")
+def list_treadmills() -> list[Treadmill]:
+    return list(app.state.treadmills.values())
+
+
+@app.post("/api/treadmills", status_code=201)
+def create_treadmill(treadmill: Treadmill) -> Treadmill:
+    if treadmill.name in app.state.treadmills:
+        raise HTTPException(409, "treadmill name already exists")
+    app.state.treadmills[treadmill.name] = treadmill
+    _persist_treadmills()
+    return treadmill
+
+
+@app.put("/api/treadmills/{name}")
+def update_treadmill(name: str, treadmill: Treadmill) -> Treadmill:
+    if name not in app.state.treadmills:
+        raise HTTPException(404, "treadmill not found")
+    if treadmill.name != name:
+        app.state.treadmills.pop(name, None)
+    app.state.treadmills[treadmill.name] = treadmill
+    _persist_treadmills()
+    return treadmill
+
+
+@app.delete("/api/treadmills/{name}")
+def delete_treadmill(name: str):
+    if name not in app.state.treadmills:
+        raise HTTPException(404, "treadmill not found")
+    del app.state.treadmills[name]
+    _persist_treadmills()
+    return {"ok": True}
 
 
 # --------------------------------------------------------------------------- #
@@ -176,10 +272,15 @@ class ReconnectBody(BaseModel):
 
 @app.post("/api/reconnect")
 def reconnect(body: ReconnectBody):
-    """Reopen the (optionally new) serial port live and leave mock mode."""
+    """Reopen the serial port live and leave mock mode. A given port is saved onto the
+    active profile's treadmill so it sticks."""
     if body.serial_port:
-        app.state.config.serial_port = body.serial_port
-        _store().save_config(app.state.config)
+        prof = app.state.profiles.get(app.state.config.active_profile)
+        tms = app.state.treadmills
+        tname = prof.treadmill if prof and prof.treadmill in tms else next(iter(tms), None)
+        if tname:
+            tms[tname].serial_port = body.serial_port
+            _persist_treadmills()
     return _engine().reconnect(body.serial_port)
 
 
@@ -212,10 +313,14 @@ def session_start():
     return {"ok": True}
 
 
+class StopSessionBody(BaseModel):
+    save: bool = True
+
+
 @app.post("/api/session/stop")
-def session_stop():
-    s = _engine().stop_session()
-    return {"ok": True, "saved": s is not None}
+def session_stop(body: StopSessionBody | None = None):
+    persisted = _engine().stop_session(save=(body.save if body else True))
+    return {"ok": True, "saved": persisted}
 
 
 # --------------------------------------------------------------------------- #
@@ -239,6 +344,16 @@ async def ws_status(ws: WebSocket):
 def _persist_profiles() -> None:
     _store().save_profiles(app.state.profiles)
     _engine().update_profiles(app.state.profiles)
+
+
+def _persist_persons() -> None:
+    _store().save_persons(app.state.persons)
+    _engine().update_persons(app.state.persons)
+
+
+def _persist_treadmills() -> None:
+    _store().save_treadmills(app.state.treadmills)
+    _engine().update_treadmills(app.state.treadmills)
 
 
 @app.on_event("shutdown")
